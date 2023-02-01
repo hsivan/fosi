@@ -11,7 +11,7 @@ FOSI is written in pure Python.
 Use the following instructions to install a
 binary package with `pip`, or to download FOSI's source code.
 We support installing `fosi` package on Linux (Ubuntu 18.04 or later).
-**The installation requires Python >=3.8, <3.11**.
+**The installation requires Python >=3.9, <3.11**.
 
 To download FOSI's source code run:
 ```bash

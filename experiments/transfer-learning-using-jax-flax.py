@@ -4,29 +4,25 @@ import csv
 import os
 import numpy as np
 from typing import Callable
-
-from jax.flatten_util import ravel_pytree
+import warnings
+from functools import partial
 from tqdm.auto import tqdm
 from timeit import default_timer as timer
 
 import tensorflow as tf
 import tensorflow_datasets as tfds
-
 import jax
-import optax
-import flax
+from jax.flatten_util import ravel_pytree
 import jax.numpy as jnp
 from jax import jit
+from jax.config import config
 from jax_resnet import pretrained_resnet, slice_variables, Sequential
+import flax
 from flax.training import train_state
 from flax import linen as nn
 from flax.core import FrozenDict, frozen_dict
-from jax.config import config
+import optax
 
-import warnings
-from functools import partial
-
-from fosi.extreme_spectrum_estimation import get_ese_fn
 from fosi.fosi_optimizer import fosi_momentum, fosi_adam
 from test_utils import get_config, start_test, write_config_to_file
 
@@ -53,10 +49,6 @@ def train_transfer_learning(optimizer_name):
         'FREEZE_BACKBONE': True
     }
 
-    # # Data Preprocessing
-
-    # In[4]:
-
     def transform_images(row, size):
         """
         Resize image
@@ -72,7 +64,6 @@ def train_transfer_learning(optimizer_name):
         RETURNS train and test dataset
 
         """
-
         # Construct a tf.data.Dataset
         train_ds, test_ds = tfds.load('cifar10', split=['train', 'test'], shuffle_files=True)
 
@@ -85,33 +76,13 @@ def train_transfer_learning(optimizer_name):
 
         return train_dataset, test_dataset
 
-    class MarginLayer(nn.Module):
-        @nn.compact
-        def __call__(self, inputs):
-            raise NotImplementedError
-
     class Head(nn.Module):
         """ head model """
         batch_norm_cls: partial = partial(nn.BatchNorm, momentum=0.9)
 
         @nn.compact
         def __call__(self, inputs, train: bool):
-            output_n = inputs.shape[-1]
-
-            '''x = self.batch_norm_cls(use_running_average=not train)(inputs)
-            x = nn.Dropout(rate=0.25)(x, deterministic=not train)
-            x = nn.Dense(features=output_n)(x)
-            x = nn.relu(x)
-            x = self.batch_norm_cls(use_running_average=not train)(x)
-            x = nn.Dropout(rate=0.5)(x, deterministic=not train)
-            x = nn.Dense(features=Config["NUM_LABELS"])(x)'''
-
-            '''x = self.batch_norm_cls(use_running_average=not train)(inputs)
-            x = nn.Dropout(rate=0.25)(x, deterministic=not train)
-            x = nn.Dense(features=Config["NUM_LABELS"])(x)'''
-
             x = nn.Dense(features=Config["NUM_LABELS"])(inputs)
-
             return x
 
     class Model(nn.Module):
@@ -193,7 +164,6 @@ def train_transfer_learning(optimizer_name):
     train_dataset, test_dataset = load_datasets()
     print(len(train_dataset))
 
-    total_batch_size = Config["BATCH_SIZE"] * jax.local_device_count()
     num_train_steps = len(train_dataset)
     print(num_train_steps)
 
@@ -256,22 +226,19 @@ def train_transfer_learning(optimizer_name):
         writer.writerow(["epoch", "train_loss", "train_acc", "val_loss", "val_acc", "latency", "wall_time"])
 
     batch = next(iter(train_dataset))
-    batches_for_lanczos = [(jnp.array(batch[0], dtype=jnp.float32), jnp.array(batch[1], dtype=jnp.float32))]
-    num_params = ravel_pytree(variables['params']['head'])[0].shape[0]
-    ese_fn = get_ese_fn(loss_f, num_params, conf['approx_newton_k'],
-                        batches_for_lanczos, k_smallest=conf['approx_newton_l'])
+    batch = (jnp.array(batch[0], dtype=jnp.float32), jnp.array(batch[1], dtype=jnp.float32))
 
     print("Number of frozen parameters:", ravel_pytree(variables['params']['backbone'])[0].shape[0])
 
     if conf['optimizer'] == 'my_momentum':
-        optim = fosi_momentum(optax.sgd(conf["learning_rate"], momentum=conf["momentum"], nesterov=False), ese_fn,
+        optim = fosi_momentum(optax.sgd(conf["learning_rate"], momentum=conf["momentum"], nesterov=False), loss_f, batch,
                               decay=conf["momentum"],
                               num_iters_to_approx_eigs=conf["num_iterations_between_ese"],
                               approx_newton_k=conf["approx_newton_k"],
                               approx_newton_l=conf["approx_newton_l"], warmup_w=conf["num_warmup_iterations"],
                               alpha=conf["alpha"], learning_rate_clip=3.0)
     elif conf['optimizer'] == 'my_adam':
-        optim = fosi_adam(optax.adam(conf["learning_rate"]), ese_fn,
+        optim = fosi_adam(optax.adam(conf["learning_rate"]), loss_f, batch,
                           decay=conf["momentum"],
                           num_iters_to_approx_eigs=conf["num_iterations_between_ese"],
                           approx_newton_k=conf["approx_newton_k"],
@@ -438,8 +405,7 @@ def train_transfer_learning(optimizer_name):
         avg_valid_acc = sum(valid_accuracy) / len(valid_accuracy)
         # avg_valid_acc = np.array(avg_valid_acc)[0]
         avg_valid_loss = sum(valid_loss) / len(valid_loss)
-        print(
-            f"[{epoch_i + 1}/{Config['N_EPOCHS']}] Valid Accuracy: {avg_valid_acc:.03} Valid Loss: {avg_valid_loss:.03}")
+        print(f"[{epoch_i + 1}/{Config['N_EPOCHS']}] Valid Accuracy: {avg_valid_acc:.03} Valid Loss: {avg_valid_loss:.03}")
 
         with open(train_stats_file, 'a') as f:
             writer = csv.writer(f)

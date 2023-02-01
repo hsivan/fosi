@@ -3,18 +3,15 @@ import jax
 import numpy as np
 from timeit import default_timer as timer
 
-import jax.numpy as jnp
 import optax
+import jax.numpy as jnp
 from jax import random
 from jax import value_and_grad
 from jax import jit
 from jax.example_libraries import stax
 from jax.example_libraries.stax import Dense, Flatten, LogSoftmax
-from jax.flatten_util import ravel_pytree
-
 from tensorflow.keras.datasets import mnist
 
-from fosi.extreme_spectrum_estimation import get_ese_fn
 from fosi.fosi_optimizer import fosi_adam, fosi_momentum
 from test_utils import start_test, get_config, write_config_to_file
 
@@ -26,7 +23,7 @@ print(jax.local_devices())
 def train_mnist(optimizer_name):
     config.update("jax_enable_x64", False)
 
-    def data_generator(images, labels, batch_size=128, is_valid=False, key=None):
+    def data_generator(images, labels, batch_size=128, is_valid=False):
         # 1. Calculate the total number of batches
         num_batches = int(np.ceil(len(images) / batch_size))
 
@@ -34,25 +31,19 @@ def train_mnist(optimizer_name):
         indices = np.arange(len(images))
 
         if not is_valid:
-            if key is None:
-                raise ValueError("A PRNG key is required if `aug` is set to True")
-            else:
-                np.random.shuffle(indices)
+            # Shuffle the data for training (not required for validation).
+            np.random.shuffle(indices)
 
         for batch in range(num_batches):
             curr_idx = indices[batch * batch_size: (batch + 1) * batch_size]
             batch_images = images[curr_idx]
             batch_labels = labels[curr_idx]
 
-            # if not is_valid:
-            #    batch_images = augment_images(batch_images, key=key)
             yield batch_images, batch_labels
 
     def get_normalized_dataset():
-        # The downloaded dataset consists of two tuples. The first
-        # tuple represents the training data consisting of pairs of images
-        # and labels. Similarly, the second tuple consists of validation/test data.
-        # I will use the second tuple as the validation data for this demo
+        # The downloaded dataset consists of two tuples. The first tuple represents the training data consisting
+        # of pairs of images and labels. Similarly, the second tuple consists of validation/test data.
         (x_train, y_train), (x_valid, y_valid) = mnist.load_data()
         print(f"\nNumber of training samples: {len(x_train)} with samples shape: {x_train.shape[1:]}")
         print(f"Number of validation samples: {len(x_valid)} with samples shape: {x_valid.shape[1:]}")
@@ -61,8 +52,7 @@ def train_mnist(optimizer_name):
         x_train_normalized = jnp.array(x_train / 255.)
         x_valid_normalized = jnp.array(x_valid / 255.)
 
-        # One hot encoding applied to the labels. We have 10
-        # classes in the dataset, hence the depth of OHE would be 10
+        # One hot encoding applied to the labels. We have 10 classes in the dataset, hence the depth of OHE would be 10.
         y_train_ohe = jnp.squeeze(jax.nn.one_hot(y_train, num_classes=10))
         y_valid_ohe = jnp.squeeze(jax.nn.one_hot(y_valid, num_classes=10))
 
@@ -77,7 +67,7 @@ def train_mnist(optimizer_name):
 
     @jit
     def loss_fn(params, batch_data):
-        """Implements cross-entropy loss function.
+        """ Implements cross-entropy loss function.
 
         Args:
             params: Parameters of the network
@@ -87,10 +77,10 @@ def train_mnist(optimizer_name):
         """
         inputs, targets = batch_data
         preds = net_apply(params, inputs)
-        return -jnp.mean(jnp.sum(preds * targets, axis=1))  # + 5e-4 * l2_norm(params)
+        return -jnp.mean(jnp.sum(preds * targets, axis=1))
 
     def calculate_accuracy(params, batch_data):
-        """Implements accuracy metric.
+        """ Implements accuracy metric.
 
         Args:
             params: Parameters of the network
@@ -103,10 +93,9 @@ def train_mnist(optimizer_name):
         predicted_class = jnp.argmax(net_apply(params, inputs), axis=1)
         return jnp.mean(predicted_class == target_class)
 
-    # jit the train and test steps to make them more efficient
     @jit
     def inference(params, batch_data):
-        """Implements train step.
+        """ Implements train step.
 
         Args:
             opt_state: Current state of the optimizer
@@ -118,14 +107,13 @@ def train_mnist(optimizer_name):
         batch_accuracy = calculate_accuracy(params, batch_data)
         return batch_loss, batch_accuracy
 
-    # jit the train and test steps to make them more efficient
     @jit
-    def train_step_second_order(step, opt_state, params, batch_data):
-        """Implements train step.
+    def train_step(opt_state, params, batch_data):
+        """ Implements train step.
 
         Args:
-            step: Integer representing the step index
             opt_state: Current state of the optimizer
+            params: Network parameters
             batch_data: A batch of data (images and labels)
         Returns:
             Batch loss, batch accuracy, updated optimizer state
@@ -134,7 +122,6 @@ def train_mnist(optimizer_name):
         batch_accuracy = calculate_accuracy(params, batch_data)
 
         deltas, opt_state = optimizer.update(batch_gradients, opt_state, params)
-        # deltas, opt_state = optimizer.update(batch_gradients, opt_state, params, [batch_data])
         params = optax.apply_updates(params, deltas)
 
         return batch_loss, batch_accuracy, opt_state, params
@@ -157,20 +144,17 @@ def train_mnist(optimizer_name):
 
     # We have defined our model. We need to initialize the params based on the input shape.
     # The images in our dataset are of shape (32, 32, 3). Hence we will initialize the
-    # network with the input shape (-1, 32, 32, 3). -1 represents the batch dimension here
+    # network with the input shape (-1, 32, 32, 3). -1 represents the batch dimension here.
     net_out_shape, net_params = net_init(random.PRNGKey(111), input_shape=(-1, 784))
 
-    valid_data_gen = data_generator(x_valid_normalized, y_valid_ohe, batch_size=conf["batch_size"], is_valid=True)
-    batches_for_lanczos = list(valid_data_gen)[:conf["num_batches_to_approx_lr"]]
-    num_params = ravel_pytree(net_params)[0].shape[0]
-    ese_fn = get_ese_fn(loss_fn, num_params, conf["approx_newton_k"],
-                        batches_for_lanczos, k_smallest=conf["approx_newton_l"])
+    train_data_gen = data_generator(x_train_normalized, y_train_ohe, batch_size=conf["batch_size"], is_valid=True)
+    batch = list(train_data_gen)[0]
 
     def get_optimizer():
         if conf["optimizer"] == 'momentum':
             return optax.sgd(conf["learning_rate"], momentum=conf["momentum"], nesterov=False)
         elif conf["optimizer"] == 'my_momentum':
-            return fosi_momentum(optax.sgd(conf["learning_rate"], momentum=conf["momentum"], nesterov=False), ese_fn,
+            return fosi_momentum(optax.sgd(conf["learning_rate"], momentum=conf["momentum"], nesterov=False), loss_fn, batch,
                                  decay=conf["momentum"],
                                  num_iters_to_approx_eigs=conf["num_iterations_between_ese"],
                                  approx_newton_k=conf["approx_newton_k"],
@@ -179,7 +163,7 @@ def train_mnist(optimizer_name):
         elif conf["optimizer"] == 'adam':
             return optax.adam(conf["learning_rate"])
         elif conf["optimizer"] == 'my_adam':
-            return fosi_adam(optax.adam(conf["learning_rate"]), ese_fn,
+            return fosi_adam(optax.adam(conf["learning_rate"]), loss_fn, batch,
                              decay=conf["momentum"],
                              num_iters_to_approx_eigs=conf["num_iterations_between_ese"],
                              approx_newton_k=conf["approx_newton_k"],
@@ -188,8 +172,6 @@ def train_mnist(optimizer_name):
         else:
             raise "Illegal optimizer " + conf["optimizer"]
 
-    # opt_init, opt_update, get_params = get_optimizer(conf["learning_rate"])
-    # opt_state = opt_init(net_params)
     optimizer = get_optimizer()
     opt_state = optimizer.init(net_params)
 
@@ -199,27 +181,11 @@ def train_mnist(optimizer_name):
     with open(train_stats_file, 'w') as f:
         writer = csv.writer(f)
         writer.writerow(["epoch", "train_loss", "train_acc", "val_loss", "val_acc", "latency", "wall_time"])
-        # writer.writerow(["epoch", "iteration", "train_loss", "train_acc", "valid_loss", "valid_acc", "iteration_latency", "epoch_latency"])
-
-    # Lists to record loss and accuracy for each epoch
-    training_loss = []
-    validation_loss = []
-    training_accuracy = []
-    validation_accuracy = []
-    key = jax.random.PRNGKey(0)
 
     start_time = 1e10
     for i in range(conf["num_epochs"]):
         if i == 1:
             start_time = timer()
-
-        # Key to be passed to the data generator for augmenting
-        # training dataset
-        key, subkey = random.split(key)
-
-        # Initialize data generators
-        train_data_gen = data_generator(x_train_normalized, y_train_ohe, batch_size=conf["batch_size"], is_valid=False,
-                                        key=key)
 
         # Lists to store loss and accuracy for each batch
         train_batch_loss, train_batch_acc = [], []
@@ -230,13 +196,11 @@ def train_mnist(optimizer_name):
         epoch_start = timer()
 
         # Training
-        step = 0
-        while step < num_train_batches:
+        train_data_gen = data_generator(x_train_normalized, y_train_ohe, batch_size=conf["batch_size"], is_valid=False)
+        for step in range(num_train_batches):
             iteration_start = timer()
             batch_data = next(train_data_gen)
-            step += 1
-            loss_value, acc, opt_state, net_params = train_step_second_order(i * num_train_batches + step, opt_state,
-                                                                             net_params, batch_data)
+            loss_value, acc, opt_state, net_params = train_step(opt_state, net_params, batch_data)
             iteration_end = timer()
 
             train_batch_loss.append(loss_value)
@@ -261,13 +225,7 @@ def train_mnist(optimizer_name):
         epoch_train_acc = np.mean(train_batch_acc)
         epoch_valid_acc = np.mean(valid_batch_acc)
 
-        training_loss.append(epoch_train_loss)
-        training_accuracy.append(epoch_train_acc)
-        validation_loss.append(epoch_valid_loss)
-        validation_accuracy.append(epoch_valid_acc)
-
-        print(
-            f"loss: {epoch_train_loss:.3f}  acc: {epoch_train_acc:.3f}  valid_loss: {epoch_valid_loss:.3f}  valid_acc: {epoch_valid_acc:.3f}  latency: {epoch_end - epoch_start}")
+        print(f"loss: {epoch_train_loss:.3f}  acc: {epoch_train_acc:.3f}  valid_loss: {epoch_valid_loss:.3f}  valid_acc: {epoch_valid_acc:.3f}  latency: {epoch_end - epoch_start}")
         with open(train_stats_file, 'a') as f:
             writer = csv.writer(f)
             writer.writerow(

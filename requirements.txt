@@ -1,9 +1,7 @@
 cuda-python==11.8.1
-
-# Must run the following two commands manually
-conda install -c anaconda cudnn==8.2.1 (8.2.1)
-pip install --upgrade "jax[cuda]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html   # Installs the wheel compatible with CUDA 11 and cuDNN 8.2 or newer.
-
+nvidia-cudnn-cu11==8.7.0.84
+-f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+jax[cuda]
 conda install -c "nvidia/label/cuda-11.4.0" cuda-nvcc
 tensorflow
 tensorflow-datasets
@@ -15,3 +13,5 @@ matplotlib
 flax
 pandas
 jax-resnet
+numpy
+tqdm

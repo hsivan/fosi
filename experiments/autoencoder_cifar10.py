@@ -1,36 +1,26 @@
 # Based on: https://uvadlc-notebooks.readthedocs.io/en/latest/tutorial_notebooks/JAX/tutorial9/AE_CIFAR10.html
+
 import csv
 import os
 import numpy as np
-from jax.flatten_util import ravel_pytree
 from jax.config import config
-
-import matplotlib.pyplot as plt
-import matplotlib
-from timeit import default_timer as timer
-
-from fosi.extreme_spectrum_estimation import get_ese_fn
-from fosi.fosi_optimizer import fosi_adam, fosi_momentum
-
-from test_utils import start_test, get_config, write_config_to_file
-
-matplotlib.rcParams['lines.linewidth'] = 2.0
-
 from tqdm.auto import tqdm
-
-import jax
-from jax import random
-from flax import linen as nn
-from flax.training import train_state, checkpoints
-
-import optax
+import matplotlib.pyplot as plt
+from timeit import default_timer as timer
 
 import torch.utils.data as data
 import torchvision
 from torchvision.datasets import CIFAR10
 import torch
-
 from torch.utils.tensorboard import SummaryWriter
+import jax
+from jax import random
+from flax import linen as nn
+from flax.training import train_state, checkpoints
+import optax
+
+from fosi.fosi_optimizer import fosi_adam, fosi_momentum
+from test_utils import start_test, get_config, write_config_to_file
 
 # Path to the folder where the datasets are/should be downloaded
 DATASET_PATH = "./data"
@@ -107,7 +97,6 @@ class Encoder(nn.Module):
 
 
 # Test encoder implementation.
-# Random key for initialization.
 rng = random.PRNGKey(0)
 # Example images as input
 imgs = next(iter(train_loader))[0]
@@ -146,7 +135,6 @@ class Decoder(nn.Module):
 
 
 # Test decoder implementation.
-# Random key for initialization.
 rng = random.PRNGKey(0)
 # Example latents as input
 rng, lat_rng = random.split(rng)
@@ -180,7 +168,6 @@ class Autoencoder(nn.Module):
 
 
 # Test Autoencoder implementation.
-# Random key for initialization.
 rng = random.PRNGKey(0)
 # Example images as input
 imgs = next(iter(train_loader))[0]
@@ -298,11 +285,8 @@ class TrainerModule:
         rng, init_rng = jax.random.split(rng)
         params = self.model.init(init_rng, self.exmp_imgs)['params']
 
-        batches_for_lanczos = [next(iter(val_loader))]
-        num_params = ravel_pytree(params)[0].shape[0]
+        batch = next(iter(val_loader))
         loss_fn = lambda params, batch: mse_recon_loss(self.model, params, batch)
-        ese_fn = get_ese_fn(loss_fn, num_params, conf["approx_newton_k"],
-                            batches_for_lanczos, k_smallest=conf['approx_newton_l'])
 
         # Initialize learning rate schedule and optimizer
         print("len(train_loader)", len(train_loader))
@@ -315,7 +299,7 @@ class TrainerModule:
         elif conf["optimizer"] == 'my_adam':
             optimizer = optax.chain(
                 optax.clip(1.0),  # Clip gradients at 1
-                fosi_adam(optax.adam(conf["learning_rate"]), ese_fn,
+                fosi_adam(optax.adam(conf["learning_rate"]), loss_fn, batch,
                           decay=conf["momentum"],
                           num_iters_to_approx_eigs=conf["num_iterations_between_ese"],
                           approx_newton_k=conf["approx_newton_k"],
@@ -330,7 +314,8 @@ class TrainerModule:
         elif conf["optimizer"] == 'my_momentum':
             optimizer = optax.chain(
                 optax.clip(1.0),  # Clip gradients at 1
-                fosi_momentum(optax.sgd(conf["learning_rate"], momentum=conf["momentum"], nesterov=False), ese_fn,
+                fosi_momentum(optax.sgd(conf["learning_rate"], momentum=conf["momentum"], nesterov=False), loss_fn,
+                              batch,
                               decay=conf["momentum"],
                               num_iters_to_approx_eigs=conf["num_iterations_between_ese"],
                               approx_newton_k=conf["approx_newton_k"],

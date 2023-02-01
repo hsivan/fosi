@@ -1,43 +1,24 @@
-# Copyright 2020 DeepMind Technologies Limited. All Rights Reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-# ==============================================================================
-"""Character-level language modelling with a recurrent network in JAX."""
-
-# Workaround according to: https://github.com/google/jax/issues/13504
-import tensorflow as tf
-
-tf.config.experimental.set_visible_devices([], "GPU")
+# Based on https://github.com/deepmind/dm-haiku/blob/main/examples/rnn/train.py :
+# character-level language modelling with a recurrent network in JAX.
 
 import csv
-from typing import Any, NamedTuple
+from typing import Any, NamedTuple, Iterator, Mapping
 from timeit import default_timer as timer
 
+import tensorflow as tf
+import tensorflow_datasets as tfds
+import numpy as np
+import optax
 import haiku as hk
-from experiments import tiny_shakespeare_dataset
 import jax
 from jax import lax
 import jax.numpy as jnp
-import numpy as np
-import optax
-import tensorflow_datasets as tfds
-from jax.flatten_util import ravel_pytree
 from jax.config import config
 
-from fosi.extreme_spectrum_estimation import get_ese_fn
 from fosi.fosi_optimizer import fosi_momentum, fosi_adam
 from test_utils import get_config, start_test, write_config_to_file
 
+tf.config.experimental.set_visible_devices([], "GPU")
 print("Device:", jax.devices()[0])
 
 TRAIN_BATCH_SIZE = 32
@@ -50,6 +31,46 @@ TRAINING_STEPS = 10000
 EVALUATION_INTERVAL = 100
 SAMPLING_INTERVAL = 100
 SEED = 42
+
+
+class TinyShakespeareDataset:
+    Batch = Mapping[str, np.ndarray]
+    NUM_CHARS = 128
+
+    @staticmethod
+    def load(
+            split: tfds.Split,
+            *,
+            batch_size: int,
+            sequence_length: int,
+    ) -> Iterator[Batch]:
+        """ Creates the Tiny Shakespeare dataset as a character modelling task. """
+
+        def preprocess_fn(x: Mapping[str, tf.Tensor]) -> Mapping[str, tf.Tensor]:
+            x = x['text']
+            x = tf.strings.unicode_split(x, 'UTF-8')
+            x = tf.squeeze(tf.io.decode_raw(x, tf.uint8), axis=-1)
+            x = tf.cast(x, tf.int32)
+            return {'input': x[:-1], 'target': x[1:]}
+
+        ds = tfds.load(name='tiny_shakespeare', split=split)
+        ds = ds.map(preprocess_fn)
+        ds = ds.unbatch()
+        ds = ds.batch(sequence_length, drop_remainder=True)
+        ds = ds.shuffle(100)
+        ds = ds.repeat()
+        ds = ds.batch(batch_size)
+        ds = ds.map(lambda b: tf.nest.map_structure(tf.transpose, b))  # Time major.
+
+        return iter(tfds.as_numpy(ds))
+
+    @staticmethod
+    def decode(x: np.ndarray) -> str:
+        return ''.join([chr(x) for x in x])
+
+    @staticmethod
+    def encode(x: str) -> np.ndarray:
+        return np.array([ord(s) for s in x])
 
 
 class LoopValues(NamedTuple):
@@ -66,16 +87,16 @@ class TrainingState(NamedTuple):
 def make_network() -> hk.RNNCore:
     """Defines the network architecture."""
     model = hk.DeepRNN([
-        lambda x: jax.nn.one_hot(x, num_classes=tiny_shakespeare_dataset.NUM_CHARS),
+        lambda x: jax.nn.one_hot(x, num_classes=TinyShakespeareDataset.NUM_CHARS),
         hk.LSTM(HIDDEN_SIZE),
         jax.nn.relu,
         hk.LSTM(HIDDEN_SIZE),
-        hk.nets.MLP([HIDDEN_SIZE, tiny_shakespeare_dataset.NUM_CHARS]),
+        hk.nets.MLP([HIDDEN_SIZE, TinyShakespeareDataset.NUM_CHARS]),
     ])
     return model
 
 
-def sequence_loss(batch: tiny_shakespeare_dataset.Batch) -> jnp.ndarray:
+def sequence_loss(batch: TinyShakespeareDataset.Batch) -> jnp.ndarray:
     """Unrolls the network over a sequence of inputs & targets, gets loss."""
     # Note: this function is impure; we hk.transform() it below.
     core = make_network()
@@ -132,14 +153,14 @@ def main(optimizer_name):
     start_time = 1e10
 
     # Make training dataset.
-    train_data = tiny_shakespeare_dataset.load(
+    train_data = TinyShakespeareDataset.load(
         tfds.Split.TRAIN,
         batch_size=TRAIN_BATCH_SIZE,
         sequence_length=SEQUENCE_LENGTH)
 
     # Make evaluation dataset(s).
     eval_data = {  # pylint: disable=g-complex-comprehension
-        split: tiny_shakespeare_dataset.load(
+        split: TinyShakespeareDataset.load(
             split,
             batch_size=EVAL_BATCH_SIZE,
             sequence_length=SEQUENCE_LENGTH)
@@ -157,22 +178,18 @@ def main(optimizer_name):
     rng = hk.PRNGSequence(SEED)
     initial_params = params_init(next(rng), next(train_data))
 
-    def make_optimizer(initial_params, batch) -> optax.GradientTransformation:
+    def make_optimizer(batch) -> optax.GradientTransformation:
         """Defines the optimizer."""
-        batches_for_lanczos = [batch]
-        num_params = ravel_pytree(initial_params)[0].shape[0]
-        ese_fn = get_ese_fn(loss_fn, num_params, conf["approx_newton_k"],
-                            batches_for_lanczos, k_smallest=conf["approx_newton_l"])
 
         if conf['optimizer'] == 'my_momentum':
-            optim = fosi_momentum(optax.sgd(conf["learning_rate"], momentum=conf["momentum"], nesterov=False), ese_fn,
+            optim = fosi_momentum(optax.sgd(conf["learning_rate"], momentum=conf["momentum"], nesterov=False), loss_fn, batch,
                                   decay=conf["momentum"],
                                   num_iters_to_approx_eigs=conf["num_iterations_between_ese"],
                                   approx_newton_k=conf["approx_newton_k"],
                                   approx_newton_l=conf["approx_newton_l"], warmup_w=conf["num_warmup_iterations"],
                                   alpha=conf["alpha"], learning_rate_clip=3.0)
         elif conf['optimizer'] == 'my_adam':
-            optim = fosi_adam(optax.adam(conf["learning_rate"]), ese_fn,
+            optim = fosi_adam(optax.adam(conf["learning_rate"]), loss_fn, batch,
                               decay=conf["momentum"],
                               num_iters_to_approx_eigs=conf["num_iterations_between_ese"],
                               approx_newton_k=conf["approx_newton_k"],
@@ -187,12 +204,12 @@ def main(optimizer_name):
 
         return optim
 
-    optimizer = make_optimizer(initial_params, next(train_data))
+    optimizer = make_optimizer(next(train_data))
     initial_opt_state = optimizer.init(initial_params)
     state = TrainingState(params=initial_params, opt_state=initial_opt_state)
 
     @jax.jit
-    def update(state: TrainingState, batch: tiny_shakespeare_dataset.Batch) -> TrainingState:
+    def update(state: TrainingState, batch: TinyShakespeareDataset.Batch) -> TrainingState:
         """Does a step of SGD given inputs & targets."""
         # _, optimizer = make_optimizer()
         _, loss_fn = hk.without_apply_rng(hk.transform(sequence_loss))
@@ -217,8 +234,8 @@ def main(optimizer_name):
             rng_key = next(rng)
             samples = sample_fn(state.params, rng_key, context, SAMPLE_LENGTH)
 
-            prompt = tiny_shakespeare_dataset.decode(context)
-            continuation = tiny_shakespeare_dataset.decode(samples)
+            prompt = TinyShakespeareDataset.decode(context)
+            continuation = TinyShakespeareDataset.decode(samples)
 
             print('Prompt: %s', prompt)
             print('Continuation: %s', continuation)

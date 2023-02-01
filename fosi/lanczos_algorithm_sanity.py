@@ -15,6 +15,7 @@ from lanczos_algorithm import lanczos_alg
 
 
 def lanczos_algorithm_test():
+
     def get_batch(input_size, output_size, batch_size, key):
         key, split = random.split(key)
         xs = random.normal(split, shape=(batch_size, input_size))
@@ -24,17 +25,13 @@ def lanczos_algorithm_test():
         return (xs, ys), key
 
     def prepare_single_layer_model(input_size, output_size, width, key):
-        init_random_params, predict = stax.serial(Dense(width), Tanh,
-                                                  Dense(output_size), LogSoftmax)
-
+        init_random_params, predict = stax.serial(Dense(width), Tanh, Dense(output_size), LogSoftmax)
         key, split = random.split(key)
         _, params = init_random_params(split, (-1, input_size))
         return predict, params, key
 
-
     def loss(y, y_hat):
         return -np.sum(y * y_hat)
-
 
     def full_hessian(loss, params):
         flat_params, unravel = ravel_pytree(params)
@@ -58,7 +55,6 @@ def lanczos_algorithm_test():
 
     predict, params, key = prepare_single_layer_model(input_size, output_size, width, key)
     num_params = ravel_pytree(params)[0].shape[0]
-
     b, key = get_batch(input_size, output_size, batch_size, key)
 
     def loss_fn(params, batch):
@@ -67,12 +63,11 @@ def lanczos_algorithm_test():
     largest_k = 10
     smallest_k = 3
     lanczos_order = 100
-    hvp_cl = lanczos_alg(num_params, lanczos_order, loss_fn, key, lanczos_order, return_precision='32')  # Return all lanczos_order eigen products
+    hvp_cl = lanczos_alg(lanczos_order, loss_fn, key, lanczos_order, return_precision='32')  # Return all lanczos_order eigen products
 
     # compute the full hessian
     loss_cl = functools.partial(loss_fn, batch=b)
     hessian = full_hessian(loss_cl, params)
-
     eigs_true, eigvecs_true = np.linalg.eigh(hessian)
 
     for i in range(10):
@@ -110,7 +105,6 @@ def lanczos_algorithm_test():
 
 def lanczos_eigen_approx_test():
     n_dim = 1500
-    max_eigval = 200
     atol_e = 1e-4
     key = random.PRNGKey(0)
     lanczos_order = 100
@@ -123,8 +117,7 @@ def lanczos_eigen_approx_test():
         return a.at[..., i, j].set(val)
 
     eigenvectors = np.eye(n_dim)
-    # for i in range(0, n_dim, 2):
-    #    eigenvectors[i][i], eigenvectors[i][i+1], eigenvectors[i+1][i], eigenvectors[i+1][i+1] = 0.5, 0.5, -0.5, 0.5
+
     eigenvectors = eigenvectors.at[0, 0].set(0.5)
     eigenvectors = eigenvectors.at[0, 1].set(0.5)
     eigenvectors = eigenvectors.at[1, 0].set(-0.5)
@@ -142,13 +135,13 @@ def lanczos_eigen_approx_test():
     eigs_true, eigvecs_true = np.linalg.eigh(hessian)
 
     def objective(x, batch=None):
-        return 0.5 * x @ hessian @ x.T  # + 0.1 * (np.sum(np.sin(4 * x)) / x.shape[0] + 1.0)
+        return 0.5 * x @ hessian @ x.T
 
     x_initial = np.ones(n_dim) * 0.5
     x_initial = x_initial.at[1].set(1.0)
     x_initial = x_initial @ eigenvectors
 
-    hvp_cl = lanczos_alg(n_dim, lanczos_order, objective, key, lanczos_order, return_precision='32')  # Return all lanczos_order eigen products
+    hvp_cl = lanczos_alg(lanczos_order, objective, key, lanczos_order, return_precision='32')  # Return all lanczos_order eigen products
     eigs_lanczos, eigvecs_lanczos, _, _ = hvp_cl(x_initial, None)
 
     assert np.allclose(eigs_true[-largest_k:], eigs_lanczos[-largest_k:], atol=atol_e), print("eigs_true:", eigs_true[-largest_k:], "eigs_lanczos:", eigs_lanczos[-largest_k:])

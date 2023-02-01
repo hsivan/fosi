@@ -23,7 +23,22 @@ from jax import jvp, grad
 from jax.config import config
 
 
-def lanczos_alg(dim, order, loss, rng_key, k_largest, k_smallest=0, return_precision='32'):
+def lanczos_alg(order, loss, rng_key, k_largest, l_smallest=0, return_precision='32'):
+    """
+    Lanczos algorithm for tridiagonalizing a real symmetric matrix, using full reorthogonalization.
+    This function returns a function that performs the Lanczos iterations and can be jitted.
+    Args:
+        order: an integer corresponding to the number of Lanczos steps to take.
+        loss: the loss function used to build the hvp operator (loss function to derive).
+        rng_key: JAX PRNG key.
+        k_largest: an integer corresponding to the required number of the largest eigenvalues and eigenvectors.
+        l_smallest: an integer corresponding to the required number of the smallest eigenvalues and eigenvectors.
+        return_precision: the algorithm must run in high precision; however, after extracting the eigenvalues and
+            eigenvectors we can cast it back to 32/64 bit according to the precision required in return_precision.
+    Returns:
+        lanczos_alg_jitted: a function that performs the Lanczos algorith and can be jitted.
+    """
+
     # The algorithm must run in high precision; however, after extracting the eigenvalues and eigenvectors we can
     # cast it back to 32 bit.
     config.update("jax_enable_x64", True)
@@ -80,25 +95,27 @@ def lanczos_alg(dim, order, loss, rng_key, k_largest, k_smallest=0, return_preci
     @jit
     def lanczos_alg_jitted(params, batch):
         """
-            Lanczos algorithm for tridiagonalizing a real symmetric matrix.
-            This function applies Lanczos algorithm of a given order.  This function
-            does full reorthogonalization.
-            The first time the function is called it is compiled, which can take ~30 second for 10,000,000 parameters and order 100.
+            Lanczos algorithm for tridiagonalizing a real symmetric matrix, using full reorthogonalization.
+            The first time the function is called it is compiled, which can take ~30 second for 10,000,000 parameters
+            and order (m) 100.
             Args:
-                matrix_vector_product: Maps v -> Hv for a real symmetric matrix H. Input/Output must be of shape [dim].
-                dim: Matrix H is [dim, dim].
-                order: An integer corresponding to the number of Lanczos steps to take.
-                rng_key: The jax PRNG key.
+                params: values of the model/function parameters. The gradient of the loss at this params value is used
+                    in the hvp operator.
+                batch: a batch of samples that determines the actual loss function (each loss_i is determined by a
+                    batch_i of samples, and we use a specific loss_i).
             Returns:
-                tridiag: A tridiagonal matrix of size (order, order).
-                vecs: A numpy array of size (order, dim) corresponding to the Lanczos vectors.
+                k_largest_eigenvals: approximate k largest eigenvalues of the Hessian of loss_i at the point params.
+                k_largest_eigenvecs: approximate k eigenvectors corresponding to the largest eigenvalues.
+                l_smallest_eigenvals: approximate l smallest eigenvalues of the Hessian of loss_i at the point params.
+                l_smallest_eigenvecs: approximate l eigenvectors corresponding to the smallest eigenvalues.
             """
 
         # Initialization
-        _, unravel = ravel_pytree(params)
+        params_flatten, unravel = ravel_pytree(params)
+        num_params = params_flatten.shape[0]
         tridiag = np.zeros((order, order), dtype=np.float64)
-        vecs = np.zeros((order, dim), dtype=np.float64)
-        init_vec = random.normal(rng_key, shape=(dim,))
+        vecs = np.zeros((order, num_params), dtype=np.float64)
+        init_vec = random.normal(rng_key, shape=(num_params,))
         init_vec = init_vec / np.linalg.norm(init_vec)
         vecs = vecs.at[0].set(init_vec)
 
@@ -112,9 +129,9 @@ def lanczos_alg(dim, order, loss, rng_key, k_largest, k_smallest=0, return_preci
         precision = np.float64 if return_precision == '64' else np.float32
         k_largest_eigenvals = eigs_tridiag[order-k_largest:].astype(precision)
         k_largest_eigenvecs = (eigvecs_triag.T[order-k_largest:] @ vecs).astype(precision)
-        k_smallest_eigenvals = eigs_tridiag[:k_smallest].astype(precision)
-        k_smallest_eigenvecs = (eigvecs_triag.T[:k_smallest] @ vecs).astype(precision)
+        l_smallest_eigenvals = eigs_tridiag[:l_smallest].astype(precision)
+        l_smallest_eigenvecs = (eigvecs_triag.T[:l_smallest] @ vecs).astype(precision)
 
-        return k_largest_eigenvals, k_largest_eigenvecs, k_smallest_eigenvals, k_smallest_eigenvecs
+        return k_largest_eigenvals, k_largest_eigenvecs, l_smallest_eigenvals, l_smallest_eigenvecs
 
     return lanczos_alg_jitted

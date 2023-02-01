@@ -1,15 +1,13 @@
-from typing import Any, Optional, NamedTuple
+from typing import Any, Optional, NamedTuple, Callable
 
 from jax.flatten_util import ravel_pytree
 import jax
 import jax.numpy as jnp
+from optax import Params, GradientTransformation
+from optax import safe_int32_increment
+from optax import OptState
 
-from optax._src import base
-from optax._src import numerics
-from optax._src import utils
-from optax._src.base import OptState
-from optax._src.combine import chain
-from optax._src.base import Callable
+from fosi.extreme_spectrum_estimation import get_ese_fn
 
 
 def approx_learning_rates_and_eigenvectors(ese_fn, params):
@@ -56,16 +54,17 @@ def get_g1_and_g2(g, k_eigenvecs):
 
 class ScaleByFosiState(NamedTuple):
     base_opt_state: OptState
-    velocity: base.Params
+    velocity: Params
     count: jnp.ndarray
     k_learning_rates: jnp.ndarray
     k_eigenvecs: jnp.ndarray
 
 
 def scale_by_fosi(
-        base_optimizer: base.GradientTransformation,
-        ese_fn: Callable,
+        base_optimizer: GradientTransformation,
         momentum_func: Callable,
+        loss_fn: Callable,
+        batch: Any,
         accumulator_dtype: Optional[Any] = None,
         num_iters_to_approx_eigs: int = 100,
         approx_newton_k: int = 5,
@@ -73,16 +72,15 @@ def scale_by_fosi(
         warmup_w: Optional[int] = None,
         alpha: float = 1.0,
         learning_rate_clip: Optional[float] = 3.0,
-) -> base.GradientTransformation:
-    accumulator_dtype = utils.canonicalize_dtype(accumulator_dtype)
+) -> GradientTransformation:
+    accumulator_dtype = None if accumulator_dtype is None else jax.dtypes.canonicalize_dtype(accumulator_dtype)
     warmup_w = warmup_w if warmup_w is not None else num_iters_to_approx_eigs
+    ese_fn = get_ese_fn(loss_fn, approx_newton_k, batch, k_smallest=approx_newton_l)
 
     # Note: Adam should use learning_rate_clip = 1.0
 
     def init_fn(params):
-        flat_params, _ = ravel_pytree(params)
-        num_params = flat_params.shape[0]
-
+        num_params = ravel_pytree(params)[0].shape[0]
         base_opt_state = base_optimizer.init(params)
 
         velocity = jax.tree_map(lambda t: jnp.zeros_like(t, dtype=accumulator_dtype), params)
@@ -96,8 +94,8 @@ def scale_by_fosi(
         g1, g2 = get_g1_and_g2(updates, state.k_eigenvecs)
 
         new_velocity = jax.tree_map(momentum_func, g1, state.velocity)
-
-        new_velocity = utils.cast_tree(new_velocity, accumulator_dtype)
+        # Cast the tree to accumulator_dtype
+        new_velocity = new_velocity if accumulator_dtype is None else jax.tree_map(lambda t: t.astype(accumulator_dtype), new_velocity)
 
         newton_direction, k_learning_rates, k_eigenvecs = appprox_newton_direction(new_velocity, state,
                                                                                    num_iters_to_approx_eigs,
@@ -112,25 +110,25 @@ def scale_by_fosi(
 
         # Scale base_opt_deltas by a clipped factor k_learning_rates[approx_newton_l] / k_learning_rates[-1]
         scaling_factor = jax.lax.cond((state.count + 1 >= warmup_w) & ((state.count + 1 - warmup_w) >= 0),
-                                      lambda x: jnp.clip(k_learning_rates[approx_newton_l] / k_learning_rates[-1], 1.0,
-                                                         learning_rate_clip),
+                                      lambda x: jnp.clip(k_learning_rates[approx_newton_l] / k_learning_rates[-1], 1.0, learning_rate_clip),
                                       lambda x: jnp.float32(1.0),
                                       None)
         base_opt_deltas = jax.tree_map(lambda x: x * scaling_factor, base_opt_deltas)
 
         # base_opt_deltas already negated, therefore in the update it appears without the minus sign
         updates = jax.tree_map(lambda x, y: x - alpha * y, base_opt_deltas, newton_direction)
-        count_inc = numerics.safe_int32_increment(state.count)
+        count_inc = safe_int32_increment(state.count)
         return updates, ScaleByFosiState(base_opt_state=new_base_opt_state, velocity=new_velocity, count=count_inc,
                                          k_learning_rates=k_learning_rates, k_eigenvecs=k_eigenvecs)
 
-    return base.GradientTransformation(init_fn, update_fn)
+    return GradientTransformation(init_fn, update_fn)
 
 
 def fosi(
-        base_optimizer: base.GradientTransformation,
-        ese_fn: Callable,
+        base_optimizer: GradientTransformation,
         momentum_func: Callable,
+        loss_fn: Callable,
+        batch: Any,
         accumulator_dtype: Optional[Any] = None,
         num_iters_to_approx_eigs: int = 100,
         approx_newton_k: int = 5,
@@ -138,56 +136,57 @@ def fosi(
         warmup_w: Optional[int] = None,
         alpha: float = 1.0,
         learning_rate_clip: Optional[float] = 3.0,
-) -> base.GradientTransformation:
-    return chain(
-        (scale_by_fosi(base_optimizer=base_optimizer, ese_fn=ese_fn, momentum_func=momentum_func,
-                       accumulator_dtype=accumulator_dtype, num_iters_to_approx_eigs=num_iters_to_approx_eigs,
-                       approx_newton_k=approx_newton_k, approx_newton_l=approx_newton_l, warmup_w=warmup_w, alpha=alpha,
-                       learning_rate_clip=learning_rate_clip)),
-    )
+) -> GradientTransformation:
+    return scale_by_fosi(base_optimizer=base_optimizer, momentum_func=momentum_func, loss_fn=loss_fn, batch=batch,
+                         accumulator_dtype=accumulator_dtype, num_iters_to_approx_eigs=num_iters_to_approx_eigs,
+                         approx_newton_k=approx_newton_k, approx_newton_l=approx_newton_l, warmup_w=warmup_w,
+                         alpha=alpha, learning_rate_clip=learning_rate_clip)
 
 
 def fosi_adam(
-        base_optimizer: base.GradientTransformation,  # Should be optax.adam
-        ese_fn: Callable,
+        base_optimizer: GradientTransformation,  # Should be a GradientTransformation instance returned by optax.adam()
+        loss_fn: Callable,
+        batch: Any,
         decay: float = 0.9,
         accumulator_dtype: Optional[Any] = None,
         num_iters_to_approx_eigs: int = 100,
         approx_newton_k: int = 5,
         approx_newton_l: int = 0,
         warmup_w: Optional[int] = None,
-        alpha: float = 1.0,
-) -> base.GradientTransformation:
-    return fosi(base_optimizer, ese_fn, lambda g, t: (1 - decay) * g + decay * t, accumulator_dtype,
+        alpha: float = 0.1,
+) -> GradientTransformation:
+    return fosi(base_optimizer, lambda g, t: (1 - decay) * g + decay * t, loss_fn, batch, accumulator_dtype,
                 num_iters_to_approx_eigs, approx_newton_k, approx_newton_l, warmup_w, alpha, 1.0)
 
 
 def fosi_momentum(
-        base_optimizer: base.GradientTransformation,  # Should be optax.sgd with momentum
-        ese_fn: Callable,
+        base_optimizer: GradientTransformation,  # Should be a GradientTransformation instance returned by optax.sgd() with momentum
+        loss_fn: Callable,
+        batch: Any,
         decay: float = 0.9,
         accumulator_dtype: Optional[Any] = None,
         num_iters_to_approx_eigs: int = 100,
         approx_newton_k: int = 5,
         approx_newton_l: int = 0,
         warmup_w: Optional[int] = None,
-        alpha: float = 1.0,
+        alpha: float = 0.1,
         learning_rate_clip: Optional[float] = 3.0,
-) -> base.GradientTransformation:
-    return fosi(base_optimizer, ese_fn, lambda g, t: g + decay * t, accumulator_dtype,
+) -> GradientTransformation:
+    return fosi(base_optimizer, lambda g, t: g + decay * t, loss_fn, batch, accumulator_dtype,
                 num_iters_to_approx_eigs, approx_newton_k, approx_newton_l, warmup_w, alpha, learning_rate_clip)
 
 
 def fosi_sgd(
-        base_optimizer: base.GradientTransformation,  # Should be optax.sgd without momentum
-        ese_fn: Callable,
+        base_optimizer: GradientTransformation,  # Should be a GradientTransformation instance returned by optax.sgd() without momentum
+        loss_fn: Callable,
+        batch: Any,
         accumulator_dtype: Optional[Any] = None,
         num_iters_to_approx_eigs: int = 100,
         approx_newton_k: int = 5,
         approx_newton_l: int = 0,
         warmup_w: Optional[int] = None,
-        alpha: float = 1.0,
+        alpha: float = 0.1,
         learning_rate_clip: Optional[float] = 3.0,
-) -> base.GradientTransformation:
-    return fosi(base_optimizer, ese_fn, lambda g, t: g, accumulator_dtype,
+) -> GradientTransformation:
+    return fosi(base_optimizer, lambda g, t: g, loss_fn, batch, accumulator_dtype,
                 num_iters_to_approx_eigs, approx_newton_k, approx_newton_l, warmup_w, alpha, learning_rate_clip)
