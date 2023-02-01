@@ -213,7 +213,7 @@ def train_transfer_learning(optimizer_name):
         return loss
 
     # Momentum with 1e-3 obtains 0.5758 train loss (after 20 epochs), while 1e-2 obtains 0.6037. Therefore, using 1e-3.
-    conf = get_config(optimizer=optimizer_name, approx_newton_k=10, lanczos_order=40, batch_size=Config['BATCH_SIZE'],
+    conf = get_config(optimizer=optimizer_name, approx_newton_k=10, batch_size=Config['BATCH_SIZE'],
                       learning_rate=Config['LR'], num_iterations_between_ese=800, approx_newton_l=0,
                       num_warmup_iterations=len(train_dataset), alpha=0.01)
 

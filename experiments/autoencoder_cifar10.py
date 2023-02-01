@@ -421,9 +421,8 @@ for optimizer_name in ['my_momentum', 'momentum', 'my_adam', 'adam']:
     config.update("jax_enable_x64", False)
 
     # Momentum diverges with learning rate 1e-2. Using 1e-3 instead.
-    conf = get_config(optimizer=optimizer_name, approx_newton_k=10, lanczos_order=40,
-                      batch_size=256, learning_rate=1e-3, num_iterations_between_ese=800,
-                      approx_newton_l=0, alpha=0.01)
+    conf = get_config(optimizer=optimizer_name, approx_newton_k=10, batch_size=256, learning_rate=1e-3,
+                      num_iterations_between_ese=800, approx_newton_l=0, alpha=0.01)
     test_folder = start_test(conf["optimizer"], test_folder='test_results_autoencoder_128')
     write_config_to_file(test_folder, conf)
 

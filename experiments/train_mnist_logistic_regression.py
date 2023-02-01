@@ -136,7 +136,7 @@ def train_mnist(optimizer_name):
     print("num_train_batches:", num_train_batches, "num_valid_batches:", num_valid_batches)
 
     learning_rate = 1e-1 if 'momentum' in optimizer_name else 1e-3
-    conf = get_config(optimizer=optimizer_name, approx_newton_k=10, lanczos_order=40, batch_size=batch_size,
+    conf = get_config(optimizer=optimizer_name, approx_newton_k=10, batch_size=batch_size,
                       learning_rate=learning_rate, num_iterations_between_ese=800, approx_newton_l=0, alpha=0.01,
                       num_warmup_iterations=num_train_batches)
     test_folder = start_test(conf["optimizer"], test_folder="test_results_logistic_regression")

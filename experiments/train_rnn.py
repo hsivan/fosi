@@ -141,7 +141,7 @@ def main(optimizer_name):
     config.update("jax_enable_x64", False)
 
     learning_rate = 1e-1 if 'momentum' in optimizer_name else 1e-3
-    conf = get_config(optimizer=optimizer_name, approx_newton_k=10, lanczos_order=40, batch_size=TRAIN_BATCH_SIZE,
+    conf = get_config(optimizer=optimizer_name, approx_newton_k=10, batch_size=TRAIN_BATCH_SIZE,
                       learning_rate=learning_rate, num_iterations_between_ese=800, approx_newton_l=0, alpha=0.01)
     test_folder = start_test(conf["optimizer"], test_folder='test_results_rnn')
     write_config_to_file(test_folder, conf)
