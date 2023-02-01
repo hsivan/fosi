@@ -54,7 +54,7 @@ def create_loss_summary_table(test_result_root_folders, dataset_type='val'):
 
 
 def create_wall_time_to_loss_summary_table(dataset_type='val'):
-    # Got the wall time of the best train/validation loss of the base optimizer and then find FOSI's wall time in which
+    # Get the wall time of the best train/validation loss of the base optimizer and then find FOSI's wall time in which
     # its train/validation loss is a good as the best loss of the base optimizer.
 
     fosi_improvement = {'adam': [], 'momentum': []}
@@ -84,23 +84,14 @@ def create_wall_time_to_loss_summary_table(dataset_type='val'):
 
             fosi_losses = df_fosi[dataset_type + '_loss'][:max_data_point][df_fosi[dataset_type + '_loss'] != 0].values
             min_loss_fosi_idx = np.argmin(fosi_losses)
-            min_loss_fosi = fosi_losses[min_loss_fosi_idx]
             fosi_wall_times = df_fosi['wall_time'][:max_data_point][df_fosi[dataset_type + '_loss'] != 0].values
             min_loss_fosi_wall_time = fosi_wall_times[min_loss_fosi_idx]
-
-            # best_loss_fosi = min_loss_fosi
-            # best_loss_fosi_wall_time = int(min_loss_fosi_wall_time)
 
             # Find the first index where FOSI's loss is a good as min_loss_base
             for idx, fosi_loss in enumerate(fosi_losses):
                 if fosi_loss <= min_loss_base:
-                    min_loss_fosi = fosi_loss
                     min_loss_fosi_wall_time = fosi_wall_times[idx]
                     break
-
-            #print(task, optimizer_technique, "Base:", min_loss_base, int(min_loss_base_wall_time), "FOSI:", min_loss_fosi, int(min_loss_fosi_wall_time))
-            #best = "FOSI" if min_loss_fosi <= min_loss_base else "Base"
-            #print("Best:", best)
 
             fosi_improvement[optimizer_technique].append(min_loss_fosi_wall_time / min_loss_base_wall_time)
 
@@ -134,7 +125,7 @@ def create_wall_time_to_loss_summary_table(dataset_type='val'):
 
 
 def create_wall_time_to_acc_summary_table(dataset_type='val'):
-    # Got the wall time of the best train/validation loss of the base optimizer and then find FOSI's wall time in which
+    # Get the wall time of the best train/validation loss of the base optimizer and then find FOSI's wall time in which
     # its train/validation loss is a good as the best loss of the base optimizer.
 
     fosi_improvement = {'adam': [], 'momentum': []}
@@ -172,29 +163,19 @@ def create_wall_time_to_acc_summary_table(dataset_type='val'):
                 min_loss_fosi_idx = np.argmax(fosi_losses)
             else:
                 min_loss_fosi_idx = np.argmin(fosi_losses)
-            min_loss_fosi = fosi_losses[min_loss_fosi_idx]
             fosi_wall_times = df_fosi['wall_time'][:max_data_point][df_fosi[column] != 0].values
             min_loss_fosi_wall_time = fosi_wall_times[min_loss_fosi_idx]
-
-            # best_loss_fosi = min_loss_fosi
-            # best_loss_fosi_wall_time = int(min_loss_fosi_wall_time)
 
             # Find the first index where FOSI's loss is a good as min_loss_base
             for idx, fosi_loss in enumerate(fosi_losses):
                 if 'acc' in column:
                     if fosi_loss >= min_loss_base:
-                        min_loss_fosi = fosi_loss
                         min_loss_fosi_wall_time = fosi_wall_times[idx]
                         break
                 else:
                     if fosi_loss <= min_loss_base:
-                        min_loss_fosi = fosi_loss
                         min_loss_fosi_wall_time = fosi_wall_times[idx]
                         break
-
-            #print(task, optimizer_technique, "Base:", min_loss_base, int(min_loss_base_wall_time), "FOSI:", min_loss_fosi, int(min_loss_fosi_wall_time))
-            #best = "FOSI" if min_loss_fosi <= min_loss_base else "Base"
-            #print("Best:", best)
 
             # Ignore Audio Classification (MobileNet) task with 'adam' and 'FOSI adam' results, as Adam overfits
             fosi_improvement[optimizer_technique].append(min_loss_fosi_wall_time / min_loss_base_wall_time)
@@ -232,11 +213,11 @@ def create_wall_time_to_acc_summary_table(dataset_type='val'):
 
 if __name__ == "__main__":
 
-    test_result_root_folders = {'AC': 'test_results_mobilenet/',
-                                'LM': 'test_results_rnn/',
-                                'AE': 'test_results_autoencoder_128/',
-                                'TL': 'test_results_transfer_learning/',
-                                'LR': 'test_results_logistic_regression/'}
+    test_result_root_folders = {'AC': './test_results_mobilenet/',
+                                'LM': './test_results_rnn/',
+                                'AE': './test_results_autoencoder_128/',
+                                'TL': './test_results_transfer_learning/',
+                                'LR': './test_results_logistic_regression/'}
 
     create_loss_summary_table(test_result_root_folders, dataset_type='train')
     create_loss_summary_table(test_result_root_folders, dataset_type='val')

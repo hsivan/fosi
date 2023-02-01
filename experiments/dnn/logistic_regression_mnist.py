@@ -13,7 +13,7 @@ from jax.example_libraries.stax import Dense, Flatten, LogSoftmax
 from tensorflow.keras.datasets import mnist
 
 from fosi.fosi_optimizer import fosi_adam, fosi_momentum
-from test_utils import start_test, get_config, write_config_to_file
+from experiments.utils.test_utils import start_test, get_config, write_config_to_file
 
 from jax.config import config
 
@@ -136,8 +136,8 @@ def train_mnist(optimizer_name):
     print("num_train_batches:", num_train_batches, "num_valid_batches:", num_valid_batches)
 
     learning_rate = 1e-1 if 'momentum' in optimizer_name else 1e-3
-    conf = get_config(optimizer=optimizer_name, approx_newton_k=10, batch_size=batch_size,
-                      learning_rate=learning_rate, num_iterations_between_ese=800, approx_newton_l=0, alpha=0.01,
+    conf = get_config(optimizer=optimizer_name, approx_k=10, batch_size=batch_size,
+                      learning_rate=learning_rate, num_iterations_between_ese=800, approx_l=0, alpha=0.01,
                       num_warmup_iterations=num_train_batches)
     test_folder = start_test(conf["optimizer"], test_folder="test_results_logistic_regression")
     write_config_to_file(test_folder, conf)
@@ -157,8 +157,8 @@ def train_mnist(optimizer_name):
             return fosi_momentum(optax.sgd(conf["learning_rate"], momentum=conf["momentum"], nesterov=False), loss_fn, batch,
                                  decay=conf["momentum"],
                                  num_iters_to_approx_eigs=conf["num_iterations_between_ese"],
-                                 approx_newton_k=conf["approx_newton_k"],
-                                 approx_newton_l=conf["approx_newton_l"], warmup_w=conf["num_warmup_iterations"],
+                                 approx_k=conf["approx_k"],
+                                 approx_l=conf["approx_l"], warmup_w=conf["num_warmup_iterations"],
                                  alpha=conf["alpha"], learning_rate_clip=3.0)
         elif conf["optimizer"] == 'adam':
             return optax.adam(conf["learning_rate"])
@@ -166,8 +166,8 @@ def train_mnist(optimizer_name):
             return fosi_adam(optax.adam(conf["learning_rate"]), loss_fn, batch,
                              decay=conf["momentum"],
                              num_iters_to_approx_eigs=conf["num_iterations_between_ese"],
-                             approx_newton_k=conf["approx_newton_k"],
-                             approx_newton_l=conf["approx_newton_l"], warmup_w=conf["num_warmup_iterations"],
+                             approx_k=conf["approx_k"],
+                             approx_l=conf["approx_l"], warmup_w=conf["num_warmup_iterations"],
                              alpha=conf["alpha"])
         else:
             raise "Illegal optimizer " + conf["optimizer"]

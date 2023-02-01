@@ -25,7 +25,7 @@ def end_test():
 
 
 def get_config(optimizer='adam', learning_rate=1e-3, num_epochs=100, batch_size=128, momentum=0.9,
-               num_iterations_between_ese=2, approx_newton_k=5, approx_newton_l=0, num_warmup_iterations=None, alpha=1.0):
+               num_iterations_between_ese=2, approx_k=5, approx_l=0, num_warmup_iterations=None, alpha=1.0):
     conf = dict()
     conf["optimizer"] = optimizer  # Base optimizer. Could be 'sgd' / 'momentum' / 'adam'
     conf["learning_rate"] = learning_rate  # Learning rate of the base optimizer
@@ -33,8 +33,8 @@ def get_config(optimizer='adam', learning_rate=1e-3, num_epochs=100, batch_size=
     conf["batch_size"] = batch_size
     conf["momentum"] = momentum  # Momentum/decay parameter for evaluating the momentum (first moment) term by the base optimizer
     conf["num_iterations_between_ese"] = num_iterations_between_ese  # Call the ESE procedure once every num_iterations_between_ese
-    conf["approx_newton_k"] = approx_newton_k  # Num leading eigenvalues and eigenvectors to take out of Lanczos
-    conf["approx_newton_l"] = approx_newton_l  # Num trailing eigenvalues and eigenvectors to take out of Lanczos
+    conf["approx_k"] = approx_k  # Num leading eigenvalues and eigenvectors to take out of Lanczos
+    conf["approx_l"] = approx_l  # Num trailing eigenvalues and eigenvectors to take out of Lanczos
     conf["num_warmup_iterations"] = num_warmup_iterations  # Number of warmup iterations before running Lanczos for the first time. If None, will be considerd as num_iterations_between_ese
     conf["alpha"] = alpha  # FOSI's learning rate
     return conf

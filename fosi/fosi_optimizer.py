@@ -67,15 +67,15 @@ def scale_by_fosi(
         batch: Any,
         accumulator_dtype: Optional[Any] = None,
         num_iters_to_approx_eigs: int = 100,
-        approx_newton_k: int = 5,
-        approx_newton_l: int = 0,
+        approx_k: int = 5,
+        approx_l: int = 0,
         warmup_w: Optional[int] = None,
         alpha: float = 1.0,
         learning_rate_clip: Optional[float] = 3.0,
 ) -> GradientTransformation:
     accumulator_dtype = None if accumulator_dtype is None else jax.dtypes.canonicalize_dtype(accumulator_dtype)
     warmup_w = warmup_w if warmup_w is not None else num_iters_to_approx_eigs
-    ese_fn = get_ese_fn(loss_fn, approx_newton_k, batch, k_smallest=approx_newton_l)
+    ese_fn = get_ese_fn(loss_fn, approx_k, batch, k_smallest=approx_l)
 
     # Note: Adam should use learning_rate_clip = 1.0
 
@@ -85,8 +85,8 @@ def scale_by_fosi(
 
         velocity = jax.tree_map(lambda t: jnp.zeros_like(t, dtype=accumulator_dtype), params)
         count = jnp.zeros([], jnp.int32)
-        k_learning_rates = jnp.array([0.0] * (approx_newton_k + approx_newton_l), dtype=jnp.float32)
-        k_eigenvecs = jnp.zeros((approx_newton_k + approx_newton_l, num_params), dtype=jnp.float32)
+        k_learning_rates = jnp.array([0.0] * (approx_k + approx_l), dtype=jnp.float32)
+        k_eigenvecs = jnp.zeros((approx_k + approx_l, num_params), dtype=jnp.float32)
         return ScaleByFosiState(base_opt_state=base_opt_state, velocity=velocity, count=count,
                                 k_learning_rates=k_learning_rates, k_eigenvecs=k_eigenvecs)
 
@@ -108,9 +108,9 @@ def scale_by_fosi(
         # k_eigenvecs as well as to newton_direction (which is a linear combination of k_eigenvecs).
         base_opt_deltas = orthogonalize_vector_wrt_eigenvectors(base_opt_deltas, k_eigenvecs)
 
-        # Scale base_opt_deltas by a clipped factor k_learning_rates[approx_newton_l] / k_learning_rates[-1]
+        # Scale base_opt_deltas by a clipped factor k_learning_rates[approx_l] / k_learning_rates[-1]
         scaling_factor = jax.lax.cond((state.count + 1 >= warmup_w) & ((state.count + 1 - warmup_w) >= 0),
-                                      lambda x: jnp.clip(k_learning_rates[approx_newton_l] / k_learning_rates[-1], 1.0, learning_rate_clip),
+                                      lambda x: jnp.clip(k_learning_rates[approx_l] / k_learning_rates[-1], 1.0, learning_rate_clip),
                                       lambda x: jnp.float32(1.0),
                                       None)
         base_opt_deltas = jax.tree_map(lambda x: x * scaling_factor, base_opt_deltas)
@@ -131,15 +131,15 @@ def fosi(
         batch: Any,
         accumulator_dtype: Optional[Any] = None,
         num_iters_to_approx_eigs: int = 100,
-        approx_newton_k: int = 5,
-        approx_newton_l: int = 0,
+        approx_k: int = 5,
+        approx_l: int = 0,
         warmup_w: Optional[int] = None,
         alpha: float = 1.0,
         learning_rate_clip: Optional[float] = 3.0,
 ) -> GradientTransformation:
     return scale_by_fosi(base_optimizer=base_optimizer, momentum_func=momentum_func, loss_fn=loss_fn, batch=batch,
                          accumulator_dtype=accumulator_dtype, num_iters_to_approx_eigs=num_iters_to_approx_eigs,
-                         approx_newton_k=approx_newton_k, approx_newton_l=approx_newton_l, warmup_w=warmup_w,
+                         approx_k=approx_k, approx_l=approx_l, warmup_w=warmup_w,
                          alpha=alpha, learning_rate_clip=learning_rate_clip)
 
 
@@ -150,13 +150,13 @@ def fosi_adam(
         decay: float = 0.9,
         accumulator_dtype: Optional[Any] = None,
         num_iters_to_approx_eigs: int = 100,
-        approx_newton_k: int = 5,
-        approx_newton_l: int = 0,
+        approx_k: int = 5,
+        approx_l: int = 0,
         warmup_w: Optional[int] = None,
         alpha: float = 0.1,
 ) -> GradientTransformation:
     return fosi(base_optimizer, lambda g, t: (1 - decay) * g + decay * t, loss_fn, batch, accumulator_dtype,
-                num_iters_to_approx_eigs, approx_newton_k, approx_newton_l, warmup_w, alpha, 1.0)
+                num_iters_to_approx_eigs, approx_k, approx_l, warmup_w, alpha, 1.0)
 
 
 def fosi_momentum(
@@ -166,14 +166,14 @@ def fosi_momentum(
         decay: float = 0.9,
         accumulator_dtype: Optional[Any] = None,
         num_iters_to_approx_eigs: int = 100,
-        approx_newton_k: int = 5,
-        approx_newton_l: int = 0,
+        approx_k: int = 5,
+        approx_l: int = 0,
         warmup_w: Optional[int] = None,
         alpha: float = 0.1,
         learning_rate_clip: Optional[float] = 3.0,
 ) -> GradientTransformation:
     return fosi(base_optimizer, lambda g, t: g + decay * t, loss_fn, batch, accumulator_dtype,
-                num_iters_to_approx_eigs, approx_newton_k, approx_newton_l, warmup_w, alpha, learning_rate_clip)
+                num_iters_to_approx_eigs, approx_k, approx_l, warmup_w, alpha, learning_rate_clip)
 
 
 def fosi_sgd(
@@ -182,11 +182,11 @@ def fosi_sgd(
         batch: Any,
         accumulator_dtype: Optional[Any] = None,
         num_iters_to_approx_eigs: int = 100,
-        approx_newton_k: int = 5,
-        approx_newton_l: int = 0,
+        approx_k: int = 5,
+        approx_l: int = 0,
         warmup_w: Optional[int] = None,
         alpha: float = 0.1,
         learning_rate_clip: Optional[float] = 3.0,
 ) -> GradientTransformation:
     return fosi(base_optimizer, lambda g, t: g, loss_fn, batch, accumulator_dtype,
-                num_iters_to_approx_eigs, approx_newton_k, approx_newton_l, warmup_w, alpha, learning_rate_clip)
+                num_iters_to_approx_eigs, approx_k, approx_l, warmup_w, alpha, learning_rate_clip)

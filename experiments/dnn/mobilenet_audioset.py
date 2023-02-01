@@ -19,7 +19,7 @@ import haiku as hk
 from haiku.nets import MobileNetV1
 
 from fosi.fosi_optimizer import fosi_momentum, fosi_adam
-from test_utils import start_test, get_config, write_config_to_file
+from experiments.utils.test_utils import start_test, get_config, write_config_to_file
 
 
 print(jax.local_devices())
@@ -119,7 +119,7 @@ def train_mobilenet(optimizer_name):
 
     class MyDataset(data.Dataset):
 
-        def __init__(self, annotations_file_csv='./audio/audioset/index.csv', img_dir='./audioset_dataset/train_jpg',
+        def __init__(self, annotations_file_csv='./audioset_dataset/index.csv', img_dir='./audioset_dataset/train_jpg',
                      transform=transforms.Compose([transforms.ToTensor()])):
             super().__init__()
             df = pd.read_csv(annotations_file_csv, converters={
@@ -144,10 +144,10 @@ def train_mobilenet(optimizer_name):
 
     batch_size = 256
 
-    trainset = MyDataset(annotations_file_csv='./audio/audioset/index_train.csv', img_dir='./audioset_dataset/train_jpg')
+    trainset = MyDataset(annotations_file_csv='./audioset_dataset/index_train.csv', img_dir='./audioset_dataset/train_jpg')
     train_ds = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True, num_workers=4, drop_last=True)
 
-    validset = MyDataset(annotations_file_csv='./audio/audioset/index_valid.csv', img_dir='./audioset_dataset/valid_jpg')
+    validset = MyDataset(annotations_file_csv='./audioset_dataset/index_valid.csv', img_dir='./audioset_dataset/valid_jpg')
     val_ds = torch.utils.data.DataLoader(validset, batch_size=batch_size, shuffle=False, num_workers=4, drop_last=True)
 
     num_train_batches = len(train_ds)
@@ -156,8 +156,8 @@ def train_mobilenet(optimizer_name):
     print("num_train_batches:", num_train_batches, "num_valid_batches:", num_valid_batches)
 
     learning_rate = 1e-1 if 'momentum' in optimizer_name else 1e-3
-    conf = get_config(optimizer=optimizer_name, approx_newton_k=10, batch_size=batch_size, learning_rate=learning_rate,
-                      num_iterations_between_ese=800, approx_newton_l=0, alpha=0.01, num_warmup_iterations=num_train_batches)
+    conf = get_config(optimizer=optimizer_name, approx_k=10, batch_size=batch_size, learning_rate=learning_rate,
+                      num_iterations_between_ese=800, approx_l=0, alpha=0.01, num_warmup_iterations=num_train_batches)
     test_folder = start_test(conf["optimizer"], test_folder='test_results_mobilenet')
     write_config_to_file(test_folder, conf)
 
@@ -181,8 +181,8 @@ def train_mobilenet(optimizer_name):
             return fosi_momentum(optax.sgd(conf["learning_rate"], momentum=conf["momentum"], nesterov=False), loss_fn, batch,
                                  decay=conf["momentum"],
                                  num_iters_to_approx_eigs=conf["num_iterations_between_ese"],
-                                 approx_newton_k=conf["approx_newton_k"],
-                                 approx_newton_l=conf["approx_newton_l"], warmup_w=conf["num_warmup_iterations"],
+                                 approx_k=conf["approx_k"],
+                                 approx_l=conf["approx_l"], warmup_w=conf["num_warmup_iterations"],
                                  alpha=conf["alpha"], learning_rate_clip=3.0)
         elif conf["optimizer"] == 'adam':
             return optax.adam(conf["learning_rate"])
@@ -190,8 +190,8 @@ def train_mobilenet(optimizer_name):
             return fosi_adam(optax.adam(conf["learning_rate"]), loss_fn, batch,
                              decay=conf["momentum"],
                              num_iters_to_approx_eigs=conf["num_iterations_between_ese"],
-                             approx_newton_k=conf["approx_newton_k"],
-                             approx_newton_l=conf["approx_newton_l"], warmup_w=conf["num_warmup_iterations"],
+                             approx_k=conf["approx_k"],
+                             approx_l=conf["approx_l"], warmup_w=conf["num_warmup_iterations"],
                              alpha=conf["alpha"])
         else:
             raise "Illegal optimizer " + conf["optimizer"]

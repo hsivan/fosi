@@ -20,7 +20,7 @@ from flax.training import train_state, checkpoints
 import optax
 
 from fosi.fosi_optimizer import fosi_adam, fosi_momentum
-from test_utils import start_test, get_config, write_config_to_file
+from experiments.utils.test_utils import start_test, get_config, write_config_to_file
 
 # Path to the folder where the datasets are/should be downloaded
 DATASET_PATH = "./data"
@@ -285,7 +285,7 @@ class TrainerModule:
         rng, init_rng = jax.random.split(rng)
         params = self.model.init(init_rng, self.exmp_imgs)['params']
 
-        batch = next(iter(val_loader))
+        batch = next(iter(train_loader))
         loss_fn = lambda params, batch: mse_recon_loss(self.model, params, batch)
 
         # Initialize learning rate schedule and optimizer
@@ -302,8 +302,8 @@ class TrainerModule:
                 fosi_adam(optax.adam(conf["learning_rate"]), loss_fn, batch,
                           decay=conf["momentum"],
                           num_iters_to_approx_eigs=conf["num_iterations_between_ese"],
-                          approx_newton_k=conf["approx_newton_k"],
-                          approx_newton_l=conf["approx_newton_l"], warmup_w=conf["num_warmup_iterations"],
+                          approx_k=conf["approx_k"],
+                          approx_l=conf["approx_l"], warmup_w=conf["num_warmup_iterations"],
                           alpha=conf["alpha"])
             )
         elif conf["optimizer"] == 'momentum':
@@ -318,8 +318,8 @@ class TrainerModule:
                               batch,
                               decay=conf["momentum"],
                               num_iters_to_approx_eigs=conf["num_iterations_between_ese"],
-                              approx_newton_k=conf["approx_newton_k"],
-                              approx_newton_l=conf["approx_newton_l"], warmup_w=conf["num_warmup_iterations"],
+                              approx_k=conf["approx_k"],
+                              approx_l=conf["approx_l"], warmup_w=conf["num_warmup_iterations"],
                               alpha=conf["alpha"], learning_rate_clip=1.0)
             )
         else:
@@ -420,9 +420,9 @@ def train_cifar(latent_dim, conf=None):
 for optimizer_name in ['my_momentum', 'momentum', 'my_adam', 'adam']:
     config.update("jax_enable_x64", False)
 
-    # Momentum diverges with learning rate 1e-2. Using 1e-3 instead.
-    conf = get_config(optimizer=optimizer_name, approx_newton_k=10, batch_size=256, learning_rate=1e-3,
-                      num_iterations_between_ese=800, approx_newton_l=0, alpha=0.01)
+    # Heavy-Ball (momentum) diverges with learning rate 1e-2. Using 1e-3 instead.
+    conf = get_config(optimizer=optimizer_name, approx_k=10, batch_size=256, learning_rate=1e-3,
+                      num_iterations_between_ese=800, approx_l=0, alpha=0.01)
     test_folder = start_test(conf["optimizer"], test_folder='test_results_autoencoder_128')
     write_config_to_file(test_folder, conf)
 

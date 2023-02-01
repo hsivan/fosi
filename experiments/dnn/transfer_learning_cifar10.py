@@ -24,7 +24,7 @@ from flax.core import FrozenDict, frozen_dict
 import optax
 
 from fosi.fosi_optimizer import fosi_momentum, fosi_adam
-from test_utils import get_config, start_test, write_config_to_file
+from experiments.utils.test_utils import get_config, start_test, write_config_to_file
 
 warnings.simplefilter('ignore')
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
@@ -213,8 +213,8 @@ def train_transfer_learning(optimizer_name):
         return loss
 
     # Momentum with 1e-3 obtains 0.5758 train loss (after 20 epochs), while 1e-2 obtains 0.6037. Therefore, using 1e-3.
-    conf = get_config(optimizer=optimizer_name, approx_newton_k=10, batch_size=Config['BATCH_SIZE'],
-                      learning_rate=Config['LR'], num_iterations_between_ese=800, approx_newton_l=0,
+    conf = get_config(optimizer=optimizer_name, approx_k=10, batch_size=Config['BATCH_SIZE'],
+                      learning_rate=Config['LR'], num_iterations_between_ese=800, approx_l=0,
                       num_warmup_iterations=len(train_dataset), alpha=0.01)
 
     test_folder = start_test(conf["optimizer"], test_folder='test_results_transfer_learning')
@@ -234,15 +234,15 @@ def train_transfer_learning(optimizer_name):
         optim = fosi_momentum(optax.sgd(conf["learning_rate"], momentum=conf["momentum"], nesterov=False), loss_f, batch,
                               decay=conf["momentum"],
                               num_iters_to_approx_eigs=conf["num_iterations_between_ese"],
-                              approx_newton_k=conf["approx_newton_k"],
-                              approx_newton_l=conf["approx_newton_l"], warmup_w=conf["num_warmup_iterations"],
+                              approx_k=conf["approx_k"],
+                              approx_l=conf["approx_l"], warmup_w=conf["num_warmup_iterations"],
                               alpha=conf["alpha"], learning_rate_clip=3.0)
     elif conf['optimizer'] == 'my_adam':
         optim = fosi_adam(optax.adam(conf["learning_rate"]), loss_f, batch,
                           decay=conf["momentum"],
                           num_iters_to_approx_eigs=conf["num_iterations_between_ese"],
-                          approx_newton_k=conf["approx_newton_k"],
-                          approx_newton_l=conf["approx_newton_l"], warmup_w=conf["num_warmup_iterations"],
+                          approx_k=conf["approx_k"],
+                          approx_l=conf["approx_l"], warmup_w=conf["num_warmup_iterations"],
                           alpha=conf["alpha"])
     elif conf['optimizer'] == 'momentum':
         optim = optax.sgd(learning_rate=conf['learning_rate'], momentum=conf['momentum'], nesterov=False)

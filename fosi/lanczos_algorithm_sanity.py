@@ -124,9 +124,6 @@ def lanczos_eigen_approx_test():
     eigenvectors = eigenvectors.at[1, 1].set(0.5)
     eigenvectors = eigenvectors / np.linalg.norm(eigenvectors, axis=1)
 
-    approx_newton_k = 8
-    assert approx_newton_k <= n_dim
-
     eigenvalues = random.normal(key, shape=(n_dim,))
     eigenvalues_matrix = np.zeros_like(eigenvectors)
     eigenvalues_matrix = fill_diagonal(eigenvalues_matrix, eigenvalues)
