@@ -217,7 +217,7 @@ def train_transfer_learning(optimizer_name):
                       learning_rate=Config['LR'], num_iterations_between_ese=800, approx_l=0,
                       num_warmup_iterations=len(train_dataset), alpha=0.01)
 
-    test_folder = start_test(conf["optimizer"], test_folder='test_results_transfer_learning')
+    test_folder = start_test(conf["optimizer"], test_folder='test_results_transfer_learning_cifar10')
     write_config_to_file(test_folder, conf)
 
     train_stats_file = test_folder + "/train_stats.csv"

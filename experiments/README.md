@@ -71,3 +71,41 @@ To generate loss and accuracy summary tables run:
 python generate_result_summary.py
 ```
 The script generates four `*_summary.csv` files with the relevant information.
+
+
+## Run as a docker container
+
+We provide Dockerfile to support building the project as a docker image.
+To build the docker image you must first install docker engine and docker cli.
+After installing these, run the command to build the docker image from within <fosi_root>:
+```bash
+cd <fosi_root>
+sudo docker build -f experiments/experiments.Dockerfile -t fosi_experiment .
+```
+This docker image could be used to run the different experiments.
+
+### Quadratic functions
+The docker supports running the experiments `quadratic_jax_random_ortho_basis_gd`, `quadratic_jax_random_ortho_basis`, and `quadratic_jax_kappa_zeta`.
+For example, to run the `quadratic_jax_random_ortho_basis_gd` execute the following commands
+```bash
+cd <fosi_root>
+export experiment=quadratic_jax_random_ortho_basis_gd
+export local_result_dir=$(pwd)"/experiments/quadratic/test_results"
+export docker_result_dir="/app/experiments/test_results"
+sudo docker run -v ${local_result_dir}:${docker_result_dir} --rm fosi_experiment python /app/experiments/quadratic/${experiment}.py
+```
+
+The result folders and files can be found in the same location as running the experiments without Docker, under `<fosi_root>/experiments/quadratic`.
+
+### Deep neural networks
+The docker supports running the experiments `logistic_regression_mnist`, `transfer_learning_cifar10`, `autoencoder_cifar10`, `rnn_shakespeare`, and `mobilenet_audioset`.
+For example, to run the `logistic_regression_mnist` execute the following commands
+```bash
+cd <fosi_root>
+export experiment=logistic_regression_mnist
+export local_result_dir=$(pwd)"/experiments/dnn/test_results_"${experiment}
+export docker_result_dir="/app/experiments/test_results_"${experiment}
+sudo docker run -v ${local_result_dir}:${docker_result_dir} --rm fosi_experiment python /app/experiments/dnn/${experiment}.py
+```
+
+The result folders and files can be found in the same location as running the experiments without Docker, under `<fosi_root>/experiments/dnn`.

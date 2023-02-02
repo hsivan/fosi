@@ -1,19 +1,25 @@
 import pickle
-
 import jax
 import jax.numpy as np
+import os
 from jax import grad
 from jax.config import config
 import numpy
 from scipy.stats import special_ortho_group
 
 from fosi import get_ese_fn
-from experiments.quadratic.plot_quadratic import plot_quadratic_jax_kappa_zeta, plot_quadratic_jax_kappa_zeta_learning_curves, \
+from experiments.quadratic.plot_quadratic import plot_quadratic_jax_kappa_zeta, \
+    plot_quadratic_jax_kappa_zeta_learning_curves, \
     plot_quadratic_jax_kappa_zeta_constant_zeta, plot_quadratic_jax_kappa_zeta_constant_beta, \
-    plot_quadratic_jax_kappa_zeta_constant_zeta_beta, plot_quadratic_jax_kappa_zeta_learning_rate_uni, plot_quadratic_jax_kappa_zeta_learning_rate_single_func
+    plot_quadratic_jax_kappa_zeta_constant_zeta_beta, plot_quadratic_jax_kappa_zeta_learning_rate_uni, \
+    plot_quadratic_jax_kappa_zeta_learning_rate_single_func, plot_quadratic_jax_kappa_zeta_learning_rate
 
 config.update("jax_enable_x64", True)
 numpy.random.seed(1234)
+
+
+if not os.path.isdir('./test_results'):
+    os.makedirs('./test_results')
 
 
 def fill_diagonal(a, val):
@@ -158,7 +164,7 @@ def get_x_initial(objective, eigenvectors, n_dim=100):
 
 
 def run_grid_kappa_zeta():
-    pkl_file_name = "./quadratic_jax_kappa_zeta.pkl"
+    pkl_file_name = "test_results/quadratic_jax_kappa_zeta.pkl"
     optimizers_scores = {}
     # if os.path.isfile(pkl_file_name):
     #     optimizers_scores = pickle.load(open(pkl_file_name, 'rb'))
@@ -289,7 +295,7 @@ def run_optimizers_with_different_learning_rates(kappa=1.14, dim_non_diag=50):
                 optimizers_scores[optimizer_name] = []
             optimizers_scores[optimizer_name].append((eta, jax.device_get(scores)[-1]))
 
-    lr_pkl_file_name = "./quadratic_jax_kappa_zeta_lr_" + str(kappa).replace('.', '-') + '_' + str(dim_non_diag) + ".pkl"
+    lr_pkl_file_name = "test_results/quadratic_jax_kappa_zeta_lr_" + str(kappa).replace('.', '-') + '_' + str(dim_non_diag) + ".pkl"
     pickle.dump(optimizers_scores, open(lr_pkl_file_name, 'wb'))
 
 
@@ -305,6 +311,6 @@ if __name__ == "__main__":
     kappa_dim_non_diag_tuples = zip([90, 90, 50, 50], [1.12, 1.16, 1.12, 1.16])
     for dim_non_diag, kappa in kappa_dim_non_diag_tuples:
         run_optimizers_with_different_learning_rates(kappa, dim_non_diag)
-        #plot_quadratic_jax_kappa_zeta_learning_rate(kappa, dim_non_diag)
+        plot_quadratic_jax_kappa_zeta_learning_rate(kappa, dim_non_diag)
     plot_quadratic_jax_kappa_zeta_learning_rate_uni()
     plot_quadratic_jax_kappa_zeta_learning_rate_single_func()

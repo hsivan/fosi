@@ -70,7 +70,7 @@ def optimize_quadratic_func_with_gd_and_fosi_gd():
         optimizers_scores[(n_dim, jax.device_get(eigenvalues[0]).item(), optimizer_name)] = [x.item() for x in jax.device_get(scores)]
 
     # Plot learning curves
-    pickle.dump(optimizers_scores, open("./optimizers_scores_quadratic_gd.pkl", 'wb'))
+    pickle.dump(optimizers_scores, open("test_results/optimizers_scores_quadratic_gd.pkl", 'wb'))
 
 
 if __name__ == "__main__":

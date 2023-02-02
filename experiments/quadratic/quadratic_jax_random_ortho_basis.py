@@ -89,7 +89,7 @@ def optimize_quadratic_funcs_with_varying_dim_and_cond_number():
                 optimizers_scores[(n_dim, max_eigval, optimizer_name)] = [x.item() for x in jax.device_get(scores)]
 
     # Plot learning curves
-    pickle.dump(optimizers_scores, open("./optimizers_scores_quadratic.pkl", 'wb'))
+    pickle.dump(optimizers_scores, open("test_results/optimizers_scores_quadratic.pkl", 'wb'))
 
 
 if __name__ == "__main__":

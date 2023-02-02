@@ -423,7 +423,7 @@ for optimizer_name in ['my_momentum', 'momentum', 'my_adam', 'adam']:
     # Heavy-Ball (momentum) diverges with learning rate 1e-2. Using 1e-3 instead.
     conf = get_config(optimizer=optimizer_name, approx_k=10, batch_size=256, learning_rate=1e-3,
                       num_iterations_between_ese=800, approx_l=0, alpha=0.01)
-    test_folder = start_test(conf["optimizer"], test_folder='test_results_autoencoder_128')
+    test_folder = start_test(conf["optimizer"], test_folder='test_results_autoencoder_cifar10')
     write_config_to_file(test_folder, conf)
 
     train_stats_file = test_folder + "/train_stats.csv"

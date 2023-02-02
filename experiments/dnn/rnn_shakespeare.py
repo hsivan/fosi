@@ -143,7 +143,7 @@ def main(optimizer_name):
     learning_rate = 1e-1 if 'momentum' in optimizer_name else 1e-3
     conf = get_config(optimizer=optimizer_name, approx_k=10, batch_size=TRAIN_BATCH_SIZE,
                       learning_rate=learning_rate, num_iterations_between_ese=800, approx_l=0, alpha=0.01)
-    test_folder = start_test(conf["optimizer"], test_folder='test_results_rnn')
+    test_folder = start_test(conf["optimizer"], test_folder='test_results_rnn_shakespeare')
     write_config_to_file(test_folder, conf)
 
     train_stats_file = test_folder + "/train_stats.csv"

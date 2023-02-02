@@ -213,11 +213,11 @@ def create_wall_time_to_acc_summary_table(dataset_type='val'):
 
 if __name__ == "__main__":
 
-    test_result_root_folders = {'AC': './test_results_mobilenet/',
-                                'LM': './test_results_rnn/',
-                                'AE': './test_results_autoencoder_128/',
-                                'TL': './test_results_transfer_learning/',
-                                'LR': './test_results_logistic_regression/'}
+    test_result_root_folders = {'AC': './test_results_mobilenet_audioset/',
+                                'LM': './test_results_rnn_shakespeare/',
+                                'AE': './test_results_autoencoder_cifar10/',
+                                'TL': './test_results_transfer_learning_cifar10/',
+                                'LR': './test_results_logistic_regression_mnist/'}
 
     create_loss_summary_table(test_result_root_folders, dataset_type='train')
     create_loss_summary_table(test_result_root_folders, dataset_type='val')

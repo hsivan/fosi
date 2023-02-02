@@ -329,24 +329,24 @@ def plot_train_loss_over_iterations_and_wall_time_and_validation_accuracy(test_r
 
 if __name__ == "__main__":
     '''
-    plot_train_loss_over_iterations_and_wall_time('./test_results_logistic_regression/', 'mnist_fosi_vs_base.pdf', 0.4)
+    plot_train_loss_over_iterations_and_wall_time('./test_results_logistic_regression_mnist/', 'mnist_fosi_vs_base.pdf', 0.4)
 
-    plot_train_loss_over_iterations_and_wall_time('./test_results_autoencoder_128/', "autoencoder_cifar10_fosi_vs_base_128.pdf", 60)
+    plot_train_loss_over_iterations_and_wall_time('./test_results_autoencoder_cifar10/', "autoencoder_cifar10_fosi_vs_base_128.pdf", 60)
 
-    plot_train_loss_over_iterations_and_wall_time('./test_results_transfer_learning/', 'transfer_learning_fosi_vs_base.pdf', 0.8)
+    plot_train_loss_over_iterations_and_wall_time('./test_results_transfer_learning_cifar10/', 'transfer_learning_fosi_vs_base.pdf', 0.8)
 
-    plot_train_loss_over_iterations_and_wall_time('./test_results_rnn/', 'rnn_shakespeare_fosi_vs_base.pdf', 2.4, max_data_point=71, x_label='iteration')
+    plot_train_loss_over_iterations_and_wall_time('./test_results_rnn_shakespeare/', 'rnn_shakespeare_fosi_vs_base.pdf', 2.4, max_data_point=71, x_label='iteration')
     '''
 
-    plot_train_loss_over_iterations_and_wall_time_and_validation_loss('./test_results_logistic_regression/', 'mnist_fosi_vs_base_train_val.pdf', 0.3)
+    plot_train_loss_over_iterations_and_wall_time_and_validation_loss('./test_results_logistic_regression_mnist/', 'mnist_fosi_vs_base_train_val.pdf', 0.3)
 
-    plot_train_loss_over_iterations_and_wall_time_and_validation_loss('./test_results_autoencoder_128/', "autoencoder_cifar10_fosi_vs_base_train_val_128.pdf", y_top_lim=60)
+    plot_train_loss_over_iterations_and_wall_time_and_validation_loss('./test_results_autoencoder_cifar10/', "autoencoder_cifar10_fosi_vs_base_train_val_128.pdf", y_top_lim=60)
 
-    plot_train_loss_over_iterations_and_wall_time_and_validation_loss('./test_results_transfer_learning/', 'transfer_learning_fosi_vs_base_train_val.pdf', 0.8)
+    plot_train_loss_over_iterations_and_wall_time_and_validation_loss('./test_results_transfer_learning_cifar10/', 'transfer_learning_fosi_vs_base_train_val.pdf', 0.8)
 
-    plot_train_loss_over_iterations_and_wall_time_and_validation_loss('./test_results_rnn/', 'rnn_shakespeare_fosi_vs_base_train_val.pdf', 2.4,  max_data_point=71, x_label='iteration')
+    plot_train_loss_over_iterations_and_wall_time_and_validation_loss('./test_results_rnn_shakespeare/', 'rnn_shakespeare_fosi_vs_base_train_val.pdf', 2.4,  max_data_point=71, x_label='iteration')
 
-    plot_train_loss_over_iterations_and_wall_time_and_validation_loss('./test_results_mobilenet/', 'audioset_fosi_vs_base_train_val.pdf', 0.03, y_bottom_lim=0.013, skip_val=5)
+    plot_train_loss_over_iterations_and_wall_time_and_validation_loss('./test_results_mobilenet_audioset/', 'audioset_fosi_vs_base_train_val.pdf', 0.03, y_bottom_lim=0.013, skip_val=5)
 
-    plot_loss_and_accuracy_for_mobilenet('./test_results_mobilenet/', 'audioset_fosi_vs_base_train_val_acc.pdf', 0.03, y_bottom_lim=0.013, skip_val=5)
-    plot_train_loss_over_iterations_and_wall_time_and_validation_accuracy('test_results_mobilenet/', 'audioset_fosi_vs_base_train_val_losses.pdf', 0.025, y_bottom_lim=0.013, skip_val=5)
+    plot_loss_and_accuracy_for_mobilenet('./test_results_mobilenet_audioset/', 'audioset_fosi_vs_base_train_val_acc.pdf', 0.03, y_bottom_lim=0.013, skip_val=5)
+    plot_train_loss_over_iterations_and_wall_time_and_validation_accuracy('test_results_mobilenet_audioset/', 'audioset_fosi_vs_base_train_val_losses.pdf', 0.025, y_bottom_lim=0.013, skip_val=5)

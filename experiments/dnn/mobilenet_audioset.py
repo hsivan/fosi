@@ -158,7 +158,7 @@ def train_mobilenet(optimizer_name):
     learning_rate = 1e-1 if 'momentum' in optimizer_name else 1e-3
     conf = get_config(optimizer=optimizer_name, approx_k=10, batch_size=batch_size, learning_rate=learning_rate,
                       num_iterations_between_ese=800, approx_l=0, alpha=0.01, num_warmup_iterations=num_train_batches)
-    test_folder = start_test(conf["optimizer"], test_folder='test_results_mobilenet')
+    test_folder = start_test(conf["optimizer"], test_folder='test_results_mobilenet_audioset')
     write_config_to_file(test_folder, conf)
 
     def _model(images, is_training):

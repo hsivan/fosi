@@ -2,7 +2,6 @@ cuda-python==11.8.1
 nvidia-cudnn-cu11==8.7.0.84
 -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
 jax[cuda]
-conda install -c "nvidia/label/cuda-11.4.0" cuda-nvcc
 tensorflow
 tensorflow-datasets
 dm-haiku

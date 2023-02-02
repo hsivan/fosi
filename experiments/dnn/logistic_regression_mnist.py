@@ -139,7 +139,7 @@ def train_mnist(optimizer_name):
     conf = get_config(optimizer=optimizer_name, approx_k=10, batch_size=batch_size,
                       learning_rate=learning_rate, num_iterations_between_ese=800, approx_l=0, alpha=0.01,
                       num_warmup_iterations=num_train_batches)
-    test_folder = start_test(conf["optimizer"], test_folder="test_results_logistic_regression")
+    test_folder = start_test(conf["optimizer"], test_folder="test_results_logistic_regression_mnist")
     write_config_to_file(test_folder, conf)
 
     # We have defined our model. We need to initialize the params based on the input shape.
