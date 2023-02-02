@@ -1,6 +1,12 @@
 # Based on https://github.com/deepmind/dm-haiku/blob/main/examples/rnn/train.py :
 # character-level language modelling with a recurrent network in JAX.
 
+import os
+# Note: To maintain the default precision as 32-bit and not switch to 64-bit, set the following flag prior to any
+# imports of JAX. This is necessary as the jax_enable_x64 flag is later set to True inside the Lanczos algorithm.
+# See: https://github.com/google/jax/issues/8178
+os.environ['JAX_DEFAULT_DTYPE_BITS'] = '32'
+
 import csv
 from typing import Any, NamedTuple, Iterator, Mapping
 from timeit import default_timer as timer
@@ -13,7 +19,6 @@ import haiku as hk
 import jax
 from jax import lax
 import jax.numpy as jnp
-from jax.config import config
 
 from fosi import fosi_momentum, fosi_adam
 from experiments.utils.test_utils import get_config, start_test, write_config_to_file
@@ -138,8 +143,6 @@ def sample(
 
 
 def main(optimizer_name):
-    config.update("jax_enable_x64", False)
-
     learning_rate = 1e-1 if 'momentum' in optimizer_name else 1e-3
     conf = get_config(optimizer=optimizer_name, approx_k=10, batch_size=TRAIN_BATCH_SIZE,
                       learning_rate=learning_rate, num_iterations_between_ese=800, approx_l=0, alpha=0.01)

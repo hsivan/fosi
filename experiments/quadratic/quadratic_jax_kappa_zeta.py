@@ -188,7 +188,7 @@ def run_grid_kappa_zeta():
             beta1 = 0.9  # factor for average gradient (first moment)
             beta2 = 0.999  # factor for average squared gradient (second moment)
 
-            ese_fn = get_ese_fn(objective_fn, approx_k, [None], return_precision='64', k_smallest=0)
+            ese_fn = get_ese_fn(objective_fn, approx_k, [None], l_smallest=0, return_precision='64')
             k_eigenvals, k_eigenvecs = ese_fn(x_initial)
             print("k_eigenvals:", k_eigenvals)
 
@@ -265,7 +265,7 @@ def run_optimizers_with_different_learning_rates(kappa=1.14, dim_non_diag=50):
     beta2 = 0.999  # factor for average squared gradient (second moment)
     approx_k = 10
 
-    ese_fn = get_ese_fn(objective_fn, approx_k, [None], return_precision='64', k_smallest=0)
+    ese_fn = get_ese_fn(objective_fn, approx_k, [None], l_smallest=0, return_precision='64')
     k_eigenvals, k_eigenvecs = ese_fn(x_initial)
     fosi_adam_update_fn = lambda x, g, m, v, t, eta, beta1, beta2, mn: fosi_adam_update(x, g, m, v, t, eta, beta1, beta2, mn, k_eigenvals, k_eigenvecs)
     fosi_momentum_update_fn = lambda x, g, m, v, t, eta, beta1, beta2, mn: fosi_momentum_update(x, g, m, v, t, eta, beta1, beta2, mn, k_eigenvals, k_eigenvecs)

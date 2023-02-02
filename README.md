@@ -33,6 +33,10 @@ pip install <fosi_root>
 The following example shows how to apply FOSI with the base optimizer Adam.
 
 ```python
+import os
+# Note: To maintain the default precision as 32-bit and not switch to 64-bit, set the following flag prior to any
+# imports of JAX. This is necessary as the jax_enable_x64 flag is later set to True inside the Lanczos algorithm.
+os.environ['JAX_DEFAULT_DTYPE_BITS'] = '32'
 from fosi import fosi_adam
 import optax
 import tensorflow as tf
@@ -54,7 +58,10 @@ def mse_recon_loss(model, params, batch):
 loss_fn = lambda params, batch: mse_recon_loss(model, params, batch)
 
 # Construct the FOSI-Adam optimizer
-fosi_adam(optax.adam(1e-3), loss_fn, batch)
+optimizer = fosi_adam(optax.adam(1e-3), loss_fn, batch)
+
+# Using the optimizer is identical to using any other optax optimizer, with the
+# optimizer.init() and optimizer.update() methods.
 ```
 
 More examples can be found in the `experiments/dnn` folder.
@@ -62,7 +69,7 @@ More examples can be found in the `experiments/dnn` folder.
 ## Reproduce paper's experimental results
 
 We provide detailed instructions for reproducing the experiments from our paper.
-The full instructions and scripts are in the `experiments` folder.
+The full [instructions](experiments/README.md) and scripts are in the `experiments` folder.
 
 ## Citing AutoMon
 

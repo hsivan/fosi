@@ -1,3 +1,9 @@
+import os
+# Note: To maintain the default precision as 32-bit and not switch to 64-bit, set the following flag prior to any
+# imports of JAX. This is necessary as the jax_enable_x64 flag is later set to True inside the Lanczos algorithm.
+# See: https://github.com/google/jax/issues/8178
+os.environ['JAX_DEFAULT_DTYPE_BITS'] = '32'
+
 import csv
 import jax
 import numpy as np
@@ -15,13 +21,10 @@ from tensorflow.keras.datasets import mnist
 from fosi import fosi_adam, fosi_momentum
 from experiments.utils.test_utils import start_test, get_config, write_config_to_file
 
-from jax.config import config
-
 print(jax.local_devices())
 
 
 def train_mnist(optimizer_name):
-    config.update("jax_enable_x64", False)
 
     def data_generator(images, labels, batch_size=128, is_valid=False):
         # 1. Calculate the total number of batches

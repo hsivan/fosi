@@ -1,7 +1,12 @@
 # Based on https://www.kaggle.com/code/yashvi/transfer-learning-using-jax-flax/notebook
 
-import csv
 import os
+# Note: To maintain the default precision as 32-bit and not switch to 64-bit, set the following flag prior to any
+# imports of JAX. This is necessary as the jax_enable_x64 flag is later set to True inside the Lanczos algorithm.
+# See: https://github.com/google/jax/issues/8178
+os.environ['JAX_DEFAULT_DTYPE_BITS'] = '32'
+
+import csv
 import numpy as np
 from typing import Callable
 import warnings
@@ -15,7 +20,6 @@ import jax
 from jax.flatten_util import ravel_pytree
 import jax.numpy as jnp
 from jax import jit
-from jax.config import config
 from jax_resnet import pretrained_resnet, slice_variables, Sequential
 import flax
 from flax.training import train_state
@@ -34,8 +38,6 @@ tf.config.experimental.set_visible_devices([], "GPU")
 
 
 def train_transfer_learning(optimizer_name):
-    config.update("jax_enable_x64", False)
-
     Config = {
         'NUM_LABELS': 10,
         'N_SPLITS': 5,

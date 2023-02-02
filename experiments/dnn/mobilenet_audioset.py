@@ -1,8 +1,13 @@
+import os
+# Note: To maintain the default precision as 32-bit and not switch to 64-bit, set the following flag prior to any
+# imports of JAX. This is necessary as the jax_enable_x64 flag is later set to True inside the Lanczos algorithm.
+# See: https://github.com/google/jax/issues/8178
+os.environ['JAX_DEFAULT_DTYPE_BITS'] = '32'
+
 import csv
 import numpy as np
 from timeit import default_timer as timer
 from matplotlib import pyplot as plt
-import os
 import pandas as pd
 
 import tensorflow as tf
@@ -13,7 +18,6 @@ import optax
 import jax
 import jax.numpy as jnp
 from jax import random, value_and_grad, jit
-from jax.config import config
 from jax.lib import xla_bridge
 import haiku as hk
 from haiku.nets import MobileNetV1
@@ -28,7 +32,6 @@ tf.config.experimental.set_visible_devices([], "GPU")
 
 
 def train_mobilenet(optimizer_name):
-    config.update("jax_enable_x64", False)
 
     def sigmoid_cross_entropy(logits, labels):
         """ Computes sigmoid cross entropy given logits and multiple class labels. """

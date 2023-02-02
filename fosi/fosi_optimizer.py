@@ -75,7 +75,7 @@ def scale_by_fosi(
 ) -> GradientTransformation:
     accumulator_dtype = None if accumulator_dtype is None else jax.dtypes.canonicalize_dtype(accumulator_dtype)
     warmup_w = warmup_w if warmup_w is not None else num_iters_to_approx_eigs
-    ese_fn = get_ese_fn(loss_fn, approx_k, batch, k_smallest=approx_l)
+    ese_fn = get_ese_fn(loss_fn, approx_k, batch, approx_l)
 
     # Note: Adam should use learning_rate_clip = 1.0
 
@@ -124,6 +124,10 @@ def scale_by_fosi(
     return GradientTransformation(init_fn, update_fn)
 
 
+# Using fosi() directly is possible, but requires defining the momentum_func and learning_rate_clip parameters.
+# For ease of use, we offer fosi_adam, fosi_momentum, and fosi_sgd which automatically set the momentum_func based on
+# the underlying optimizer.
+# Note: fosi_adam has learning_rate_clip set to 1 as Adam's learning rate shouldn't be scaled.
 def fosi(
         base_optimizer: GradientTransformation,
         momentum_func: Callable,

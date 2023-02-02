@@ -45,3 +45,10 @@ pip-delete-this-directory.txt
 test_results*
 *.pkl
 figures
+
+# Datasets
+cifar10_dataset
+index_valid.csv
+index_train.csv
+train_jpg
+valid_jpg

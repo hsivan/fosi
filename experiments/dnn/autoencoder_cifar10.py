@@ -1,9 +1,13 @@
 # Based on: https://uvadlc-notebooks.readthedocs.io/en/latest/tutorial_notebooks/JAX/tutorial9/AE_CIFAR10.html
 
-import csv
 import os
+# Note: To maintain the default precision as 32-bit and not switch to 64-bit, set the following flag prior to any
+# imports of JAX. This is necessary as the jax_enable_x64 flag is later set to True inside the Lanczos algorithm.
+# See: https://github.com/google/jax/issues/8178
+os.environ['JAX_DEFAULT_DTYPE_BITS'] = '32'
+
+import csv
 import numpy as np
-from jax.config import config
 from tqdm.auto import tqdm
 import matplotlib.pyplot as plt
 from timeit import default_timer as timer
@@ -12,20 +16,17 @@ import torch.utils.data as data
 import torchvision
 from torchvision.datasets import CIFAR10
 import torch
-from torch.utils.tensorboard import SummaryWriter
 import jax
 from jax import random
 from flax import linen as nn
-from flax.training import train_state, checkpoints
+from flax.training import train_state
 import optax
 
 from fosi import fosi_adam, fosi_momentum
 from experiments.utils.test_utils import start_test, get_config, write_config_to_file
 
 # Path to the folder where the datasets are/should be downloaded
-DATASET_PATH = "./data"
-# Path to the folder where the pretrained models are saved
-CHECKPOINT_PATH = "./saved_models/tutorial9_jax"
+DATASET_PATH = "./cifar10_dataset"
 
 print("Device:", jax.devices()[0])
 
@@ -223,25 +224,6 @@ for i in range(2):
     compare_imgs(img, img_masked, "Masked -")
 
 
-class GenerateCallback:
-
-    def __init__(self, input_imgs, every_n_epochs=1):
-        super().__init__()
-        self.input_imgs = input_imgs  # Images to reconstruct during training
-        self.every_n_epochs = every_n_epochs  # Only save those images every N epochs (otherwise tensorboard gets quite large)
-
-    def log_generations(self, model, state, logger, epoch):
-        if epoch % self.every_n_epochs == 0:
-            reconst_imgs = model.apply({'params': state.params}, self.input_imgs)
-            reconst_imgs = jax.device_get(reconst_imgs)
-
-            # Plot and add to tensorboard
-            imgs = np.stack([self.input_imgs, reconst_imgs], axis=1).reshape(-1, *self.input_imgs.shape[1:])
-            imgs = jax_to_torch(imgs)
-            grid = torchvision.utils.make_grid(imgs, nrow=2, normalize=True, value_range=(-1, 1))
-            logger.add_image("Reconstructions", grid, global_step=epoch)
-
-
 class TrainerModule:
 
     def __init__(self, c_hid, latent_dim, conf, seed=42):
@@ -255,9 +237,6 @@ class TrainerModule:
         self.model = Autoencoder(c_hid=self.c_hid, latent_dim=self.latent_dim)
         # Prepare logging
         self.exmp_imgs = next(iter(val_loader))[0][:8]
-        self.log_dir = os.path.join(CHECKPOINT_PATH, f'cifar10_{self.latent_dim}')
-        self.generate_callback = GenerateCallback(self.exmp_imgs, every_n_epochs=50)
-        self.logger = SummaryWriter(log_dir=self.log_dir, filename_suffix='.' + conf["optimizer"])
         # Create jitted training and eval functions
         self.create_functions()
         # Initialize model
@@ -340,12 +319,8 @@ class TrainerModule:
             eval_loss = 0.0
             if epoch_idx % 10 == 0:
                 eval_loss = self.eval_model(val_loader)
-                self.logger.add_scalar('val/loss', eval_loss, global_step=epoch_idx)
                 if eval_loss < best_eval:
                     best_eval = eval_loss
-                    # self.save_model(step=epoch_idx)
-                self.generate_callback.log_generations(self.model, self.state, logger=self.logger, epoch=epoch_idx)
-                self.logger.flush()
                 print("eval_loss", eval_loss)
             with open(train_stats_file, 'a') as f:
                 writer = csv.writer(f)
@@ -360,7 +335,6 @@ class TrainerModule:
             losses.append(loss)
         losses_np = np.stack(jax.device_get(losses))
         avg_loss = losses_np.mean()
-        self.logger.add_scalar('train/loss', avg_loss, global_step=epoch)
         return avg_loss
 
     def eval_model(self, data_loader):
@@ -376,41 +350,11 @@ class TrainerModule:
         avg_loss = (losses_np * batch_sizes_np).sum() / batch_sizes_np.sum()
         return avg_loss
 
-    def save_model(self, step=0):
-        # Save current model at certain training iteration
-        checkpoints.save_checkpoint(ckpt_dir=self.log_dir, target=self.state.params,
-                                    prefix=f'cifar10_{self.latent_dim}_', step=step)
-
-    def delete_model(self):
-        # Save current model at certain training iteration
-        old_checkpoint = checkpoints.latest_checkpoint(ckpt_dir=self.log_dir, prefix=f'cifar10_{self.latent_dim}_')
-        if old_checkpoint:
-            os.remove(old_checkpoint)
-
-    def load_model(self, pretrained=False):
-        # Load model. We use different checkpoint for pretrained models
-        if not pretrained:
-            params = checkpoints.restore_checkpoint(ckpt_dir=self.log_dir, target=self.state.params,
-                                                    prefix=f'cifar10_{self.latent_dim}_')
-        else:
-            params = checkpoints.restore_checkpoint(
-                ckpt_dir=os.path.join(CHECKPOINT_PATH, f'cifar10_{self.latent_dim}.ckpt'), target=self.state.params)
-        self.state = train_state.TrainState.create(apply_fn=self.model.apply, params=params, tx=self.state.tx)
-
-    def checkpoint_exists(self):
-        # Check whether a pretrained model exist for this autoencoder
-        return os.path.isfile(os.path.join(CHECKPOINT_PATH, f'cifar10_{self.latent_dim}.ckpt'))
-
 
 def train_cifar(latent_dim, conf=None):
     # Create a trainer module with specified hyperparameters
     trainer = TrainerModule(c_hid=32, latent_dim=latent_dim, conf=conf)
-    trainer.delete_model()
-    if not trainer.checkpoint_exists():  # Skip training if pretrained model exists
-        trainer.train_model()
-        trainer.load_model()
-    else:
-        trainer.load_model(pretrained=True)
+    trainer.train_model()
     test_loss = trainer.eval_model(test_loader)
     # Bind parameters to model for easier inference
     trainer.model_bd = trainer.model.bind({'params': trainer.state.params})
@@ -418,8 +362,6 @@ def train_cifar(latent_dim, conf=None):
 
 
 for optimizer_name in ['my_momentum', 'momentum', 'my_adam', 'adam']:
-    config.update("jax_enable_x64", False)
-
     # Heavy-Ball (momentum) diverges with learning rate 1e-2. Using 1e-3 instead.
     conf = get_config(optimizer=optimizer_name, approx_k=10, batch_size=256, learning_rate=1e-3,
                       num_iterations_between_ese=800, approx_l=0, alpha=0.01)

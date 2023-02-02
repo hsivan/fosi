@@ -1,10 +1,15 @@
+import os
+# Note: To maintain the default precision as 32-bit and not switch to 64-bit, set the following flag prior to any
+# imports of JAX. This is necessary as the jax_enable_x64 flag is later set to True inside the Lanczos algorithm.
+# See: https://github.com/google/jax/issues/8178
+os.environ['JAX_DEFAULT_DTYPE_BITS'] = '32'
+
 import jax.numpy as np
 import jax.random as random
 from jax.example_libraries.stax import Dense, LogSoftmax, Relu, Tanh
 from jax.example_libraries import stax
 from jax.flatten_util import ravel_pytree
 from jax import jacfwd, jacrev
-from jax.config import config
 import jax
 
 import functools
@@ -63,7 +68,7 @@ def lanczos_algorithm_test():
     largest_k = 10
     smallest_k = 3
     lanczos_order = 100
-    hvp_cl = lanczos_alg(lanczos_order, loss_fn, key, lanczos_order, return_precision='32')  # Return all lanczos_order eigen products
+    hvp_cl = lanczos_alg(lanczos_order, loss_fn, key, lanczos_order)  # Return all lanczos_order eigen products
 
     # compute the full hessian
     loss_cl = functools.partial(loss_fn, batch=b)
@@ -138,7 +143,7 @@ def lanczos_eigen_approx_test():
     x_initial = x_initial.at[1].set(1.0)
     x_initial = x_initial @ eigenvectors
 
-    hvp_cl = lanczos_alg(lanczos_order, objective, key, lanczos_order, return_precision='32')  # Return all lanczos_order eigen products
+    hvp_cl = lanczos_alg(lanczos_order, objective, key, lanczos_order)  # Return all lanczos_order eigen products
     eigs_lanczos, eigvecs_lanczos, _, _ = hvp_cl(x_initial, None)
 
     assert np.allclose(eigs_true[-largest_k:], eigs_lanczos[-largest_k:], atol=atol_e), print("eigs_true:", eigs_true[-largest_k:], "eigs_lanczos:", eigs_lanczos[-largest_k:])
@@ -162,7 +167,5 @@ def lanczos_eigen_approx_test():
 
 
 if __name__ == '__main__':
-    config.update("jax_enable_x64", False)
     lanczos_algorithm_test()
-    config.update("jax_enable_x64", False)
     lanczos_eigen_approx_test()
