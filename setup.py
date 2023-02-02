@@ -15,7 +15,7 @@ VERSION = _dct['__version__']
 setuptools.setup(
     name='fosi',
     version=VERSION,
-    license='3-Clause BSD',
+    license='Apache 2.0',
     author="Hadar Sivan",
     author_email="hadarsivan@cs.technion.ac.il",
     description="FOSI library for hybrid first and second order optimization.",
@@ -23,7 +23,7 @@ setuptools.setup(
     long_description_content_type="text/markdown",
     install_requires=INSTALL_REQUIRES,
     url='https://github.com/hsivan/fosi',
-    packages=setuptools.find_packages(include=['fosi', 'fosi.*']),
+    packages=setuptools.find_packages(include=['fosi']),
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: BSD License",

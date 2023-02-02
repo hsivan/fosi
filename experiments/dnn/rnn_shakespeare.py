@@ -15,7 +15,7 @@ from jax import lax
 import jax.numpy as jnp
 from jax.config import config
 
-from fosi.fosi_optimizer import fosi_momentum, fosi_adam
+from fosi import fosi_momentum, fosi_adam
 from experiments.utils.test_utils import get_config, start_test, write_config_to_file
 
 tf.config.experimental.set_visible_devices([], "GPU")

@@ -1,19 +1,3 @@
-# Copyright 2019 Google LLC
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     https://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
-"""Code for running the Lanczos algorithm."""
-
 import jax.numpy as np
 import jax.random as random
 from jax import jit
@@ -95,20 +79,20 @@ def lanczos_alg(order, loss, rng_key, k_largest, l_smallest=0, return_precision=
     @jit
     def lanczos_alg_jitted(params, batch):
         """
-            Lanczos algorithm for tridiagonalizing a real symmetric matrix, using full reorthogonalization.
-            The first time the function is called it is compiled, which can take ~30 second for 10,000,000 parameters
-            and order (m) 100.
-            Args:
-                params: values of the model/function parameters. The gradient of the loss at this params value is used
-                    in the hvp operator.
-                batch: a batch of samples that determines the actual loss function (each loss_i is determined by a
-                    batch_i of samples, and we use a specific loss_i).
-            Returns:
-                k_largest_eigenvals: approximate k largest eigenvalues of the Hessian of loss_i at the point params.
-                k_largest_eigenvecs: approximate k eigenvectors corresponding to the largest eigenvalues.
-                l_smallest_eigenvals: approximate l smallest eigenvalues of the Hessian of loss_i at the point params.
-                l_smallest_eigenvecs: approximate l eigenvectors corresponding to the smallest eigenvalues.
-            """
+        Lanczos algorithm for tridiagonalizing a real symmetric matrix, using full reorthogonalization.
+        The first time the function is called it is compiled, which can take ~30 second for 10,000,000 parameters
+        and order (m) 100.
+        Args:
+            params: values of the model/function parameters. The gradient of the loss at this params value is used
+                in the hvp operator.
+            batch: a batch of samples that determines the actual loss function (each loss_i is determined by a
+                batch_i of samples, and we use a specific loss_i).
+        Returns:
+            k_largest_eigenvals: approximate k largest eigenvalues of the Hessian of loss_i at the point params.
+            k_largest_eigenvecs: approximate k eigenvectors corresponding to the largest eigenvalues.
+            l_smallest_eigenvals: approximate l smallest eigenvalues of the Hessian of loss_i at the point params.
+            l_smallest_eigenvecs: approximate l eigenvectors corresponding to the smallest eigenvalues.
+        """
 
         # Initialization
         params_flatten, unravel = ravel_pytree(params)

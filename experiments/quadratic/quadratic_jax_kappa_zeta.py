@@ -7,7 +7,7 @@ from jax.config import config
 import numpy
 from scipy.stats import special_ortho_group
 
-from fosi.extreme_spectrum_estimation import get_ese_fn
+from fosi import get_ese_fn
 from experiments.quadratic.plot_quadratic import plot_quadratic_jax_kappa_zeta, plot_quadratic_jax_kappa_zeta_learning_curves, \
     plot_quadratic_jax_kappa_zeta_constant_zeta, plot_quadratic_jax_kappa_zeta_constant_beta, \
     plot_quadratic_jax_kappa_zeta_constant_zeta_beta, plot_quadratic_jax_kappa_zeta_learning_rate_uni, plot_quadratic_jax_kappa_zeta_learning_rate_single_func

@@ -4,7 +4,7 @@ import jax.numpy as np
 from jax import random
 from jax.config import config
 
-from fosi.extreme_spectrum_estimation import get_ese_fn
+from fosi import get_ese_fn
 from experiments.quadratic.plot_quadratic import plot_quadratic_random_orthogonal_basis_gd
 from quadratic_jax_kappa_zeta import gd_update, fosi_gd_update, optimize, fill_diagonal, get_x_initial, objective
 

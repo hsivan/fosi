@@ -19,7 +19,7 @@ from flax import linen as nn
 from flax.training import train_state, checkpoints
 import optax
 
-from fosi.fosi_optimizer import fosi_adam, fosi_momentum
+from fosi import fosi_adam, fosi_momentum
 from experiments.utils.test_utils import start_test, get_config, write_config_to_file
 
 # Path to the folder where the datasets are/should be downloaded

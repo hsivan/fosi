@@ -31,11 +31,38 @@ pip install <fosi_root>
 ## Usage example
 
 The following example shows how to apply FOSI with the base optimizer Adam.
-TODO
+
+```python
+from fosi import fosi_adam
+import optax
+import tensorflow as tf
+import tensorflow_datasets as tfds
+
+# CIFAR-10 dataset
+train_ds, test_ds = tfds.load('cifar10', split=['train', 'test'], shuffle_files=True)
+train_dataset = train_ds.batch(128, drop_remainder=True).prefetch(tf.data.AUTOTUNE)
+batch = next(iter(train_dataset))
+
+# Define the loss function
+def mse_recon_loss(model, params, batch):
+    imgs, _ = batch
+    recon_imgs = model.apply({'params': params}, imgs)
+    loss = ((recon_imgs - imgs) ** 2).mean(axis=0).sum()  # Mean over batch, sum over pixels
+    return loss
+
+# Convert the loss function into a functions of the form f(params, batch)
+loss_fn = lambda params, batch: mse_recon_loss(model, params, batch)
+
+# Construct the FOSI-Adam optimizer
+fosi_adam(optax.adam(1e-3), loss_fn, batch)
+```
+
+More examples can be found in the `experiments/dnn` folder.
 
 ## Reproduce paper's experimental results
 
-TOSO
+We provide detailed instructions for reproducing the experiments from our paper.
+The full instructions and scripts are in the `experiments` folder.
 
 ## Citing AutoMon
 

@@ -1,6 +1,5 @@
-from . import lanczos_algorithm
-from . import extreme_spectrum_estimation
-from . import fosi_optimizer
+from .extreme_spectrum_estimation import get_ese_fn
+from .fosi_optimizer import fosi, fosi_adam, fosi_momentum, fosi_sgd
 
 import logging
 import sys
@@ -8,4 +7,4 @@ logging.basicConfig(stream=sys.stdout)
 log = logging.getLogger(__name__)
 log.setLevel(logging.NOTSET)
 
-__all__ = ['lanczos_algorithm', 'extreme_spectrum_estimation.py', 'fosi_optimizer.py']
+__all__ = ['get_ese_fn', 'fosi', 'fosi_adam', 'fosi_momentum', 'fosi_sgd']

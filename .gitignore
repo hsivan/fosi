@@ -40,3 +40,8 @@ pip-delete-this-directory.txt
 
 # IDE
 .spyproject/
+
+# Test results
+test_results*
+*.pkl
+figures

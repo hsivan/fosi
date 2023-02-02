@@ -12,7 +12,7 @@ from jax.example_libraries import stax
 from jax.example_libraries.stax import Dense, Flatten, LogSoftmax
 from tensorflow.keras.datasets import mnist
 
-from fosi.fosi_optimizer import fosi_adam, fosi_momentum
+from fosi import fosi_adam, fosi_momentum
 from experiments.utils.test_utils import start_test, get_config, write_config_to_file
 
 from jax.config import config

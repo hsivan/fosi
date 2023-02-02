@@ -6,7 +6,7 @@ from jax.config import config
 
 from experiments.quadratic.quadratic_jax_kappa_zeta import get_x_initial, objective, optimize, fosi_adam_update, \
     fosi_momentum_update, fosi_gd_update, adam_update, momentum_update, gd_update, fill_diagonal
-from fosi.extreme_spectrum_estimation import get_ese_fn
+from fosi import get_ese_fn
 from experiments.quadratic.plot_quadratic import plot_quadratic_random_orthogonal_basis
 
 config.update("jax_enable_x64", True)

@@ -18,7 +18,7 @@ from jax.lib import xla_bridge
 import haiku as hk
 from haiku.nets import MobileNetV1
 
-from fosi.fosi_optimizer import fosi_momentum, fosi_adam
+from fosi import fosi_momentum, fosi_adam
 from experiments.utils.test_utils import start_test, get_config, write_config_to_file
 
 

@@ -23,7 +23,7 @@ from flax import linen as nn
 from flax.core import FrozenDict, frozen_dict
 import optax
 
-from fosi.fosi_optimizer import fosi_momentum, fosi_adam
+from fosi import fosi_momentum, fosi_adam
 from experiments.utils.test_utils import get_config, start_test, write_config_to_file
 
 warnings.simplefilter('ignore')
