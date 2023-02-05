@@ -1,7 +1,12 @@
 # FOSI
 
 FOSI is a library for improving first order optimizers with second order information.
-TODO.
+Given a first-order base optimizer, 
+FOSI works by iteratively splitting the function to minimize into pairs of quadratic problems on orthogonal subspaces,
+then using Newton's method to optimize one and the base optimizer to optimize the other.
+
+Our analysis of FOSI’s preconditioner and effective Hessian proves that FOSI improves the condition number for a large family of optimizers.
+Our empirical evaluation demonstrates that FOSI improves the convergence rate and optimization time of GD, Heavy-Ball, and Adam when applied to several deep neural networks training tasks such as audio classification, transfer learning, and object classification and when applied to convex functions.
 
 For more information, see our ICML 2023 paper, [FOSI: Hybrid First and Second Order Optimization](TODO).
 
@@ -28,9 +33,13 @@ Or, download the code and then run:
 pip install <fosi_root>
 ```
 
-## Usage example
+## Basic usage of FOSI
 
 The following example shows how to apply FOSI with the base optimizer Adam.
+FOSI is implemented in [JAX](https://github.com/google/jax) and supports [Optax](https://github.com/deepmind/optax)
+optimizers as base optimizers.
+FOSI's API is also similar to that of Optax optimizers.
+
 
 ```python
 import os
@@ -38,30 +47,48 @@ import os
 # imports of JAX. This is necessary as the jax_enable_x64 flag is later set to True inside the Lanczos algorithm.
 os.environ['JAX_DEFAULT_DTYPE_BITS'] = '32'
 from fosi import fosi_adam
+import jax.numpy as jnp
+import jax
 import optax
-import tensorflow as tf
-import tensorflow_datasets as tfds
 
-# CIFAR-10 dataset
-train_ds, test_ds = tfds.load('cifar10', split=['train', 'test'], shuffle_files=True)
-train_dataset = train_ds.batch(128, drop_remainder=True).prefetch(tf.data.AUTOTUNE)
-batch = next(iter(train_dataset))
+def network(params, x):
+    return jnp.dot(x, params)
 
-# Define the loss function
-def mse_recon_loss(model, params, batch):
-    imgs, _ = batch
-    recon_imgs = model.apply({'params': params}, imgs)
-    loss = ((recon_imgs - imgs) ** 2).mean(axis=0).sum()  # Mean over batch, sum over pixels
+def loss_fn(params, batch):
+    x, y = batch
+    y_pred = network(params, x)
+    loss = jnp.mean(optax.l2_loss(y_pred, y))
     return loss
 
-# Convert the loss function into a functions of the form f(params, batch)
-loss_fn = lambda params, batch: mse_recon_loss(model, params, batch)
+def data_generator(key, target_params, n_dim):
+    while True:
+        key, subkey = jax.random.split(key)
+        batch_xs = jax.random.normal(subkey, (16, n_dim))
+        batch_ys = jnp.sum(batch_xs * target_params, axis=-1)
+        yield batch_xs, batch_ys
 
-# Construct the FOSI-Adam optimizer
-optimizer = fosi_adam(optax.adam(1e-3), loss_fn, batch)
+# Generate random data
+n_dim = 100
+key = jax.random.PRNGKey(42)
+target_params = 0.5
+data_gen = data_generator(key, target_params, n_dim)
 
-# Using the optimizer is identical to using any other optax optimizer, with the
-# optimizer.init() and optimizer.update() methods.
+# Construct the FOSI-Adam optimizer. The usage after construction is identical to that of Optax optimizers,
+# with the optimizer.init() and optimizer.update() methods.
+optimizer = fosi_adam(optax.adam(1e-3), loss_fn, next(data_gen))
+
+# Initialize parameters of the model and optimizer
+params = jnp.zeros(n_dim)
+opt_state = optimizer.init(params)
+
+# A simple update loop.
+for _ in range(5000):
+  grads = jax.grad(loss_fn)(params, next(data_gen))
+  updates, opt_state = jax.jit(optimizer.update)(grads, opt_state, params)
+  params = optax.apply_updates(params, updates)
+  print(params)
+
+assert jnp.allclose(params, target_params), 'Optimization should retrieve the target params used to generate the data.'
 ```
 
 More examples can be found in the `experiments/dnn` folder.
