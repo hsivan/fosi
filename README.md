@@ -13,10 +13,31 @@ For more information, see our ICML 2023 paper, [FOSI: Hybrid First and Second Or
 ## Installation
 
 FOSI is written in pure Python.
+We support installing `fosi` package on Linux (Ubuntu 20.04 or later) and the installation requires Python >=3.8.
+
+### CUDA toolkit
+
+To run FOSI with GPU, CUDA toolkit must be installed.
+If using conda environment, the installation command is:
+```bash
+conda install -c "nvidia/label/cuda-11.8.0" cuda-toolkit
+```
+Otherwise, a global installation is required:
+```bash
+sudo apt-get install cuda
+```
+After installing CUDA toolkit, follow [NVIDIA's environment setup instructions](https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html#environment-setup)
+to set the environment variables PATH and LD_LIBRARY_PATH.
+To find the lib/bin folders in case of conda environment use `find ~ -name 'libcusolver.so.11'` and in case of a
+global installation with apt-get `find /usr/ -name 'libcusolver.so.11'` and use the containing folder.
+
+Note: CUDA toolkit installation is not required when using the Docker container to run the experiments, or if running on the CPU.
+
+
+### FOSI package
+
 Use the following instructions to install a
 binary package with `pip`, or to download FOSI's source code.
-We support installing `fosi` package on Linux (Ubuntu 18.04 or later).
-**The installation requires Python >=3.9, <3.11**.
 
 To download FOSI's source code run:
 ```bash

@@ -1,11 +1,21 @@
-cuda-python==11.8.1
-nvidia-cudnn-cu11==8.7.0.84
+# 1. Run manually one of the following:
+#    If using conda environment: conda install -c "nvidia/label/cuda-11.8.0" cuda-toolkit
+#    Otherwise: sudo apt-get install cuda
+# 2. Follow https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html#environment-setup to set the
+#    environment variables PATH and LD_LIBRARY_PATH. To find the lib/bin folders
+#    in case of conda environment use: find ~ -name 'libcusolver.so.11'
+#    and in case of a global installation with apt-get: find /usr/ -name 'libcusolver.so.11'
+#    and use the containing folder.
+
+# Installs JAX's wheel compatible with CUDA 11 and cuDNN 8.2 or newer
 -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
 jax[cuda]
+optax
+
+# Packages for the experiments
 tensorflow
 tensorflow-datasets
 dm-haiku
-optax
 torch==1.12.1
 torchvision==0.13.1
 matplotlib

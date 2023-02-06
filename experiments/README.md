@@ -76,7 +76,8 @@ The script generates four `*_summary.csv` files with the relevant information.
 ## Run as a docker container
 
 We provide Dockerfile to support building the project as a docker image.
-To build the docker image you must first install docker engine and docker cli.
+To build the docker image you must first install docker engine and docker cli,
+and set up the [Nvidia container-toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html#setting-up-nvidia-container-toolkit).
 After installing these, run the command to build the docker image from within <fosi_root>:
 ```bash
 cd <fosi_root>
@@ -92,7 +93,7 @@ cd <fosi_root>
 export experiment=quadratic_jax_random_ortho_basis_gd
 export local_result_dir=$(pwd)"/experiments/quadratic/test_results"
 export docker_result_dir="/app/experiments/test_results"
-sudo docker run -v ${local_result_dir}:${docker_result_dir} --rm fosi_experiment python /app/experiments/quadratic/${experiment}.py
+sudo docker run --gpus all -v ${local_result_dir}:${docker_result_dir} --rm fosi_experiment python3 /app/experiments/quadratic/${experiment}.py
 ```
 
 The result folders and files can be found in the same location as running the experiments without Docker, under `<fosi_root>/experiments/quadratic`.
@@ -105,7 +106,7 @@ cd <fosi_root>
 export experiment=logistic_regression_mnist
 export local_result_dir=$(pwd)"/experiments/dnn/test_results_"${experiment}
 export docker_result_dir="/app/experiments/test_results_"${experiment}
-sudo docker run -v ${local_result_dir}:${docker_result_dir} --rm fosi_experiment python /app/experiments/dnn/${experiment}.py
+sudo docker run --gpus all -v ${local_result_dir}:${docker_result_dir} --rm fosi_experiment python3 /app/experiments/dnn/${experiment}.py
 ```
 
 The result folders and files can be found in the same location as running the experiments without Docker, under `<fosi_root>/experiments/dnn`.
