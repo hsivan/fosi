@@ -3,8 +3,8 @@ FROM nvidia/cuda:11.4.1-cudnn8-runtime-ubuntu20.04
 # Install python3-pip
 RUN apt update && apt install python3-pip -y
 
-COPY requirements.txt /app/requirements.txt
-RUN pip3 install -r /app/requirements.txt
+COPY experiments/experiments_requirements.txt /app/requirements.txt
+RUN pip3 install -r /app/requirements.txt -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
 
 COPY . /app
 RUN pip3 install /app

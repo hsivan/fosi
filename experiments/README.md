@@ -10,18 +10,49 @@ Make sure to add `fosi_root` to `PYTHONPATH` before running the experiments:
 export PYTHONPATH=$PYTHONPATH:<fosi_root>
 ```
 
-### External dataset
+### Download external dataset
 
 Download the external dataset used in the AC (MobileNetV1 on AudioSet data) experiment:
-1. Cd into the `audioset_dataset` folder: `cd <fosi_root>/experiments/audioset_dataset`
+1. Change directory into the AudioSet dataset folder: `cd <fosi_root>/experiments/audioset_dataset`
 2. Download the train_wav folder and train.csv file from https://www.kaggle.com/datasets/zfturbo/audioset
 3. Download the valid_wav folder and valid.csv file from https://www.kaggle.com/datasets/zfturbo/audioset-valid
-4. Run the script `convert_to_melspectogram.py`: `python convert_to_melspectogram.py`
+4. Run the script that converts the wav files to melspectogram images: `python convert_to_melspectogram.py`
 
 The script runs for ~1 hour and creates two folders, `train_jpg` and `valid_jpg`, with melspectogram images.
 
 
+### Installation
 
+Running the experiments could be done using a Docker container or directly.
+If using Docker container, ignore the following installation instructions and see [instructions for Docker](#run-as-a-docker-container).
+Otherwise, CUDA toolkit and other requirements must be installed manually.
+
+#### CUDA toolkit
+
+To run FOSI with GPU, CUDA toolkit must be installed.
+If using conda environment, the installation command is:
+```bash
+conda install -c "nvidia/label/cuda-11.8.0" cuda
+```
+Otherwise, a global installation is required:
+```bash
+sudo apt-get install cuda
+```
+After installing CUDA toolkit, follow [NVIDIA's environment setup instructions](https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html#environment-setup)
+to set the environment variables PATH and LD_LIBRARY_PATH.
+To find the lib/bin folders in case of conda environment use `find ~ -name 'libcusolver.so.11'` and in case of a
+global installation with apt-get `find /usr/ -name 'libcusolver.so.11'` and use the containing folder.
+
+Note: CUDA toolkit installation is not required when using the Docker container to run the experiments, or if running on the CPU.
+
+
+#### Experiment requirements
+
+To install the requirements for the experiments run:
+```bash
+cd <fosi_root>
+pip install -r experiments/experiments_requirements.txt -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+```
 
 ## Quadratic functions
 In these experiments we minimize quadratic functions.

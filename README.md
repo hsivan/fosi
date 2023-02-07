@@ -20,7 +20,7 @@ We support installing `fosi` package on Linux (Ubuntu 20.04 or later) and the in
 To run FOSI with GPU, CUDA toolkit must be installed.
 If using conda environment, the installation command is:
 ```bash
-conda install -c "nvidia/label/cuda-11.8.0" cuda-toolkit
+conda install -c "nvidia/label/cuda-11.8.0" cuda
 ```
 Otherwise, a global installation is required:
 ```bash
@@ -47,11 +47,11 @@ Let `fosi_root` be the root folder of the project on your local computer, for ex
 
 To install FOSI run:
 ```bash
-pip install git+https://github.com/hsivan/fosi.git
+pip install git+https://github.com/hsivan/fosi.git -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
 ```
 Or, download the code and then run:
 ```bash
-pip install <fosi_root>
+pip install <fosi_root> -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
 ```
 
 ## Basic usage of FOSI
@@ -103,11 +103,12 @@ params = jnp.zeros(n_dim)
 opt_state = optimizer.init(params)
 
 # A simple update loop.
-for _ in range(5000):
-  grads = jax.grad(loss_fn)(params, next(data_gen))
+for i in range(5000):
+  loss, grads = jax.value_and_grad(loss_fn)(params, next(data_gen))
   updates, opt_state = jax.jit(optimizer.update)(grads, opt_state, params)
   params = optax.apply_updates(params, updates)
-  print(params)
+  if i % 100 == 0:
+    print("loss:", loss)
 
 assert jnp.allclose(params, target_params), 'Optimization should retrieve the target params used to generate the data.'
 ```

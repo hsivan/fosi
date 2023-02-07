@@ -1,3 +1,4 @@
+# Skip steps 1 and 2 if using Docker container to run the experiments.
 # 1. Run manually one of the following:
 #    If using conda environment: conda install -c "nvidia/label/cuda-11.8.0" cuda-toolkit
 #    Otherwise: sudo apt-get install cuda
@@ -8,6 +9,22 @@
 #    and use the containing folder.
 
 # Installs JAX's wheel compatible with CUDA 11 and cuDNN 8.2 or newer
-#-f "https://storage.googleapis.com/jax-releases/jax_cuda_releases.html"
+#-f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
 jax[cuda11_cudnn82]
 optax
+
+# Packages for the experiments
+tensorflow
+tensorflow-datasets
+dm-haiku
+torch==1.12.1
+torchvision==0.13.1
+matplotlib
+flax
+pandas
+jax-resnet
+numpy==1.23.5
+tqdm
+scipy
+soundfile
+resampy
