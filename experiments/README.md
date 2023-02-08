@@ -5,7 +5,7 @@ Before running the experiments, download FOSI's source code:
 git clone https://github.com/hsivan/fosi
 ```
 Let `fosi_root` be the root folder of the project on your local computer.
-Make sure to add `fosi_root` to `PYTHONPATH` before running the experiments:
+Make sure to add `fosi_root` to `PYTHONPATH`:
 ```bash
 export PYTHONPATH=$PYTHONPATH:<fosi_root>
 ```
@@ -25,7 +25,7 @@ The script runs for ~1 hour and creates two folders, `train_jpg` and `valid_jpg`
 
 Running the experiments could be done using a Docker container or directly.
 If using Docker container, ignore the following installation instructions and see [instructions for Docker](#run-as-a-docker-container).
-Otherwise, CUDA toolkit and other requirements must be installed manually.
+Otherwise, CUDA toolkit and other packages must be installed manually.
 
 #### CUDA toolkit
 
@@ -109,7 +109,7 @@ The script generates four `*_summary.csv` files with the relevant information.
 We provide Dockerfile to support building the project as a docker image.
 To build the docker image you must first install docker engine and docker cli,
 and set up the [Nvidia container-toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html#setting-up-nvidia-container-toolkit).
-After installing these, run the command to build the docker image from within <fosi_root>:
+After installing these, run the command to build the docker image from within `fosi_root`:
 ```bash
 cd <fosi_root>
 sudo docker build -f experiments/experiments.Dockerfile -t fosi_experiment .
@@ -128,6 +128,12 @@ sudo docker run --gpus all -v ${local_result_dir}:${docker_result_dir} --rm fosi
 ```
 
 The result folders and files can be found in the same location as running the experiments without Docker, under `<fosi_root>/experiments/quadratic`.
+To generate figures run:
+```bash
+cd <fosi_root>/experiments/quadratic
+python plot_quadratic.py
+```
+The figures can be found under `<fosi_root>/experiments/quadratic/figures`.
 
 ### Deep neural networks
 The docker supports running the experiments `logistic_regression_mnist`, `transfer_learning_cifar10`, `autoencoder_cifar10`, `rnn_shakespeare`, and `mobilenet_audioset`.
@@ -141,3 +147,10 @@ sudo docker run --gpus all -v ${local_result_dir}:${docker_result_dir} --rm fosi
 ```
 
 The result folders and files can be found in the same location as running the experiments without Docker, under `<fosi_root>/experiments/dnn`.
+To generate figures and loss and accuracy summary tables run:
+```bash
+cd <fosi_root>/experiments/dnn
+python plot_dnn.py
+python generate_result_summary.py
+```
+The figures can be found under `<fosi_root>/experiments/dnn/figures` and four summary tables `*_summary.csv` are in `<fosi_root>/experiments/dnn`.
