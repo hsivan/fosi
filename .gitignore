@@ -45,6 +45,7 @@ pip-delete-this-directory.txt
 test_results*
 *.pkl
 figures
+result_summary
 
 # Datasets
 cifar10_dataset

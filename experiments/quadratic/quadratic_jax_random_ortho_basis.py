@@ -4,10 +4,9 @@ import jax.numpy as np
 from jax import random
 from jax.config import config
 
-from experiments.quadratic.quadratic_jax_kappa_zeta import get_x_initial, objective, optimize, fosi_adam_update, \
-    fosi_momentum_update, fosi_gd_update, adam_update, momentum_update, gd_update, fill_diagonal
+from experiments.quadratic.quadratic_test_utils import fill_diagonal, get_x_initial, objective, optimize, adam_update, \
+    fosi_adam_update, momentum_update, fosi_momentum_update, gd_update, fosi_gd_update
 from fosi import get_ese_fn
-from experiments.quadratic.plot_quadratic import plot_quadratic_random_orthogonal_basis
 
 config.update("jax_enable_x64", True)
 
@@ -94,4 +93,3 @@ def optimize_quadratic_funcs_with_varying_dim_and_cond_number():
 
 if __name__ == "__main__":
     optimize_quadratic_funcs_with_varying_dim_and_cond_number()
-    plot_quadratic_random_orthogonal_basis()

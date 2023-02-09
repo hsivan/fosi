@@ -20,8 +20,7 @@ import jax
 from jax import lax
 import jax.numpy as jnp
 
-from fosi import fosi_momentum, fosi_adam
-from experiments.utils.test_utils import get_config, start_test, write_config_to_file
+from experiments.dnn.dnn_test_utils import get_config, start_test, write_config_to_file, get_optimizer
 
 tf.config.experimental.set_visible_devices([], "GPU")
 print("Device:", jax.devices()[0])
@@ -181,33 +180,7 @@ def main(optimizer_name):
     rng = hk.PRNGSequence(SEED)
     initial_params = params_init(next(rng), next(train_data))
 
-    def make_optimizer(batch) -> optax.GradientTransformation:
-        """Defines the optimizer."""
-
-        if conf['optimizer'] == 'my_momentum':
-            optim = fosi_momentum(optax.sgd(conf["learning_rate"], momentum=conf["momentum"], nesterov=False), loss_fn, batch,
-                                  decay=conf["momentum"],
-                                  num_iters_to_approx_eigs=conf["num_iterations_between_ese"],
-                                  approx_k=conf["approx_k"],
-                                  approx_l=conf["approx_l"], warmup_w=conf["num_warmup_iterations"],
-                                  alpha=conf["alpha"], learning_rate_clip=3.0)
-        elif conf['optimizer'] == 'my_adam':
-            optim = fosi_adam(optax.adam(conf["learning_rate"]), loss_fn, batch,
-                              decay=conf["momentum"],
-                              num_iters_to_approx_eigs=conf["num_iterations_between_ese"],
-                              approx_k=conf["approx_k"],
-                              approx_l=conf["approx_l"], warmup_w=conf["num_warmup_iterations"],
-                              alpha=conf["alpha"])
-        elif conf['optimizer'] == 'momentum':
-            optim = optax.sgd(learning_rate=conf['learning_rate'], momentum=conf['momentum'], nesterov=False)
-        elif conf['optimizer'] == 'adam':
-            optim = optax.adam(learning_rate=conf['learning_rate'])
-        else:
-            raise "Illegal optimizer " + conf["optimizer"]
-
-        return optim
-
-    optimizer = make_optimizer(next(train_data))
+    optimizer = get_optimizer(conf, loss_fn, next(train_data))
     initial_opt_state = optimizer.init(initial_params)
     state = TrainingState(params=initial_params, opt_state=initial_opt_state)
 

@@ -1,19 +1,18 @@
 import pickle
+import sys
+
 import matplotlib.pyplot as plt
 from matplotlib import rcParams, rcParamsDefault
 import numpy as np
 from matplotlib import ticker
 
-from experiments.utils.visualization_utils import get_figsize
+from experiments.visualization.visualization_utils import get_figsize, set_rc_params
 
 
-def plot_quadratic_random_orthogonal_basis(fig_file_name="quadratic_random_orthogonal_basis.pdf", pkl_file="test_results/optimizers_scores_quadratic.pkl"):
-    rcParams['pdf.fonttype'] = 42
-    rcParams['ps.fonttype'] = 42
-    rcParams.update({'legend.fontsize': 5.4})
-    rcParams.update({'font.size': 5.8})
+def plot_quadratic_random_orthogonal_basis(fig_file_name="quadratic_random_orthogonal_basis.pdf", pkl_file="optimizers_scores_quadratic.pkl"):
+    set_rc_params()
 
-    optimizers_scores = pickle.load(open(pkl_file, 'rb'))
+    optimizers_scores = pickle.load(open(root_result_folder + pkl_file, 'rb'))
     optimizers_colors = {'Adam': 'tab:blue', 'HB': 'tab:orange', 'GD': 'tab:red'}
 
     n_dims = list(set([x for x, _, _ in optimizers_scores.keys()]))
@@ -58,19 +57,16 @@ def plot_quadratic_random_orthogonal_basis(fig_file_name="quadratic_random_ortho
     fig_learning_curve.legend(handles, labels, framealpha=0, frameon=False, loc="upper center", bbox_to_anchor=(0.5, 1.0), ncol=6, columnspacing=1.5, handletextpad=0.29)
     plt.subplots_adjust(top=0.93, bottom=0.12, left=0.07, right=0.99, wspace=0.3, hspace=0.1)
 
-    plt.savefig('figures/' + fig_file_name)
+    plt.savefig(output_folder + fig_file_name)
     #plt.show()
     plt.close(fig_learning_curve)
     rcParams.update(rcParamsDefault)
 
 
-def plot_quadratic_random_orthogonal_basis_4_funcs(fig_file_name="quadratic_random_orthogonal_basis_4_funcs.pdf", pkl_file="test_results/optimizers_scores_quadratic.pkl"):
-    rcParams['pdf.fonttype'] = 42
-    rcParams['ps.fonttype'] = 42
-    rcParams.update({'legend.fontsize': 5.4})
-    rcParams.update({'font.size': 5.8})
+def plot_quadratic_random_orthogonal_basis_4_funcs(fig_file_name="quadratic_random_orthogonal_basis_4_funcs.pdf", pkl_file="optimizers_scores_quadratic.pkl"):
+    set_rc_params()
 
-    optimizers_scores = pickle.load(open(pkl_file, 'rb'))
+    optimizers_scores = pickle.load(open(root_result_folder + pkl_file, 'rb'))
     optimizers_colors = {'Adam': 'tab:blue', 'HB': 'tab:orange', 'GD': 'tab:red'}
 
     n_dims = list(set([x for x, _, _ in optimizers_scores.keys()]))
@@ -126,19 +122,16 @@ def plot_quadratic_random_orthogonal_basis_4_funcs(fig_file_name="quadratic_rand
     fig_learning_curve.legend(handles, labels, framealpha=0, frameon=False, loc="upper center", bbox_to_anchor=(0.5, 1.02), ncol=6, columnspacing=1.5, handletextpad=0.29)
     plt.subplots_adjust(top=0.9, bottom=0.17, left=0.15, right=0.99, wspace=0.13, hspace=0.13)
 
-    plt.savefig('figures/' + fig_file_name)
+    plt.savefig(output_folder + fig_file_name)
     #plt.show()
     plt.close(fig_learning_curve)
     rcParams.update(rcParamsDefault)
 
 
 def plot_quadratic_random_orthogonal_basis_gd(fig_file_name="quadratic_random_orthogonal_basis_gd.pdf"):
-    rcParams['pdf.fonttype'] = 42
-    rcParams['ps.fonttype'] = 42
-    rcParams.update({'legend.fontsize': 5.4})
-    rcParams.update({'font.size': 5.8})
+    set_rc_params()
 
-    optimizers_scores = pickle.load(open("test_results/optimizers_scores_quadratic_gd.pkl", 'rb'))
+    optimizers_scores = pickle.load(open(root_result_folder + "optimizers_scores_quadratic_gd.pkl", 'rb'))
     optimizers_colors = {'GD': 'tab:blue'}
 
     n_dims = list(set([x for x, _, _ in optimizers_scores.keys()]))
@@ -173,7 +166,7 @@ def plot_quadratic_random_orthogonal_basis_gd(fig_file_name="quadratic_random_or
     fig_learning_curve.legend(framealpha=0, frameon=False, loc="upper right", bbox_to_anchor=(1, 1.05), ncol=1)
     plt.subplots_adjust(top=0.99, bottom=0.38, left=0.18, right=0.99, wspace=0.3, hspace=0.1)
 
-    plt.savefig('figures/' + fig_file_name)
+    plt.savefig(output_folder + fig_file_name)
     #plt.show()
     plt.close(fig_learning_curve)
     rcParams.update(rcParamsDefault)
@@ -212,14 +205,10 @@ beta_val_to_show_vertical_cut = 1.13
 beta_val_adam_tuning, zeta_val_adam_tuning = 1.14, 50
 
 
-def plot_quadratic_jax_kappa_zeta(fig_file_name="quadratic_jax_kappa_zeta.pdf", pkl_file="test_results/quadratic_jax_kappa_zeta.pkl"):
-    rcParams['pdf.fonttype'] = 42
-    rcParams['ps.fonttype'] = 42
-    rcParams.update({'legend.fontsize': 5.4})
-    rcParams.update({'font.size': 5.8})
-    rcParams['axes.titlesize'] = 5.8
+def plot_quadratic_jax_kappa_zeta(fig_file_name="quadratic_jax_kappa_zeta.pdf", pkl_file="quadratic_jax_kappa_zeta.pkl"):
+    set_rc_params()
 
-    optimizers_scores = pickle.load(open(pkl_file, 'rb'))
+    optimizers_scores = pickle.load(open(root_result_folder + pkl_file, 'rb'))
     optimizers_scores = filter_results_to_range(optimizers_scores)
     vmin, vmax = get_min_and_max(optimizers_scores)
 
@@ -290,20 +279,16 @@ def plot_quadratic_jax_kappa_zeta(fig_file_name="quadratic_jax_kappa_zeta.pdf", 
         if optimizer == 'Adam':
             ax.plot(beta_val_adam_tuning, zeta_val_adam_tuning, marker='o', color=optimizers_colors[optimizer], markersize=3)
 
-    plt.savefig('figures/' + fig_file_name)
+    plt.savefig(output_folder + fig_file_name)
     #plt.show()
     plt.close(fig_learning_curve)
     rcParams.update(rcParamsDefault)
 
 
-def plot_quadratic_jax_kappa_zeta_per_optimizer(fig_file_name="quadratic_jax_kappa_zeta_.pdf", pkl_file="test_results/quadratic_jax_kappa_zeta.pkl"):
-    rcParams['pdf.fonttype'] = 42
-    rcParams['ps.fonttype'] = 42
-    rcParams.update({'legend.fontsize': 5.4})
-    rcParams.update({'font.size': 5.8})
-    rcParams['axes.titlesize'] = 5.8
+def plot_quadratic_jax_kappa_zeta_per_optimizer(fig_file_name="quadratic_jax_kappa_zeta_.pdf", pkl_file="quadratic_jax_kappa_zeta.pkl"):
+    set_rc_params()
 
-    optimizers_scores = pickle.load(open(pkl_file, 'rb'))
+    optimizers_scores = pickle.load(open(root_result_folder + pkl_file, 'rb'))
     optimizers_scores = filter_results_to_range(optimizers_scores)
 
     num_optimizers = len(optimizers_scores.keys())
@@ -363,21 +348,17 @@ def plot_quadratic_jax_kappa_zeta_per_optimizer(fig_file_name="quadratic_jax_kap
             # Draw 4 markers (x-markers) in zeta_vals_to_show_learning_curves, beta_vals_to_show_learning_curves
             ax.scatter(beta_vals_to_show_learning_curves, zeta_vals_to_show_learning_curves, marker='x', color='black', s=10, linewidth=1)
 
-        plt.savefig('figures/' + fig_file_name.replace('.pdf', optimizer_name + '.pdf'))
+        plt.savefig(output_folder + fig_file_name.replace('.pdf', optimizer_name + '.pdf'))
         #plt.show()
         plt.close(fig)
 
     rcParams.update(rcParamsDefault)
 
 
-def plot_quadratic_jax_kappa_zeta_learning_curves(fig_file_name="quadratic_jax_kappa_zeta_learning_curves.pdf", pkl_file="test_results/quadratic_jax_kappa_zeta.pkl"):
-    rcParams['pdf.fonttype'] = 42
-    rcParams['ps.fonttype'] = 42
-    rcParams.update({'legend.fontsize': 5.4})
-    rcParams.update({'font.size': 5.8})
-    rcParams['axes.titlesize'] = 5.8
+def plot_quadratic_jax_kappa_zeta_learning_curves(fig_file_name="quadratic_jax_kappa_zeta_learning_curves.pdf", pkl_file="quadratic_jax_kappa_zeta.pkl"):
+    set_rc_params()
 
-    optimizers_scores = pickle.load(open(pkl_file, 'rb'))
+    optimizers_scores = pickle.load(open(root_result_folder + pkl_file, 'rb'))
     optimizers_colors = {'Adam': 'tab:blue', 'HB': 'tab:orange', 'GD': 'tab:red',
                          'FOSI-Adam': 'tab:blue', 'FOSI-HB': 'tab:orange', 'FOSI-GD': 'tab:red'}
 
@@ -422,23 +403,19 @@ def plot_quadratic_jax_kappa_zeta_learning_curves(fig_file_name="quadratic_jax_k
     fig_learning_curve.legend(handles, labels, framealpha=0, frameon=False, loc="upper center", bbox_to_anchor=(0.5, 1.02), ncol=6, columnspacing=1.5, handletextpad=0.29)
     plt.subplots_adjust(top=0.9, bottom=0.17, left=0.14, right=0.99, wspace=0.23, hspace=0.13)
 
-    plt.savefig('figures/' + fig_file_name)
+    plt.savefig(output_folder + fig_file_name)
     #plt.show()
     plt.close(fig_learning_curve)
     rcParams.update(rcParamsDefault)
 
 
-def plot_quadratic_jax_kappa_zeta_constant_zeta(pkl_file="test_results/quadratic_jax_kappa_zeta.pkl"):
-    rcParams['pdf.fonttype'] = 42
-    rcParams['ps.fonttype'] = 42
-    rcParams.update({'legend.fontsize': 5.4})
-    rcParams.update({'font.size': 5.8})
-    rcParams['axes.titlesize'] = 5.8
+def plot_quadratic_jax_kappa_zeta_constant_zeta(pkl_file="quadratic_jax_kappa_zeta.pkl"):
+    set_rc_params()
 
     optimizers_colors = {'Adam': 'tab:blue', 'HB': 'tab:orange', 'GD': 'tab:red',
                          'FOSI-Adam': 'tab:blue', 'FOSI-HB': 'tab:orange', 'FOSI-GD': 'tab:red'}
 
-    optimizers_scores = pickle.load(open(pkl_file, 'rb'))
+    optimizers_scores = pickle.load(open(root_result_folder + pkl_file, 'rb'))
     optimizers_scores = filter_results_to_range(optimizers_scores)
 
     fig, ax = plt.subplots(1, 1, figsize=get_figsize(wf=0.5, hf=0.9))
@@ -470,23 +447,19 @@ def plot_quadratic_jax_kappa_zeta_constant_zeta(pkl_file="test_results/quadratic
     fig.legend(handles, labels, framealpha=0, frameon=False, loc="upper center", bbox_to_anchor=(0.5, 1.0), ncol=3, columnspacing=1.5, handletextpad=0.29)
     plt.subplots_adjust(top=0.85, bottom=0.23, left=0.15, right=0.99)
 
-    plt.savefig('figures/' + "quadratic_jax_kappa_zeta_constant_zeta.pdf")
+    plt.savefig(output_folder + "quadratic_jax_kappa_zeta_constant_zeta.pdf")
     #plt.show()
     plt.close(fig)
     rcParams.update(rcParamsDefault)
 
 
-def plot_quadratic_jax_kappa_zeta_constant_beta(pkl_file="test_results/quadratic_jax_kappa_zeta.pkl"):
-    rcParams['pdf.fonttype'] = 42
-    rcParams['ps.fonttype'] = 42
-    rcParams.update({'legend.fontsize': 5.4})
-    rcParams.update({'font.size': 5.8})
-    rcParams['axes.titlesize'] = 5.8
+def plot_quadratic_jax_kappa_zeta_constant_beta(pkl_file="quadratic_jax_kappa_zeta.pkl"):
+    set_rc_params()
 
     optimizers_colors = {'Adam': 'tab:blue', 'HB': 'tab:orange', 'GD': 'tab:red',
                          'FOSI-Adam': 'tab:blue', 'FOSI-HB': 'tab:orange', 'FOSI-GD': 'tab:red'}
 
-    optimizers_scores = pickle.load(open(pkl_file, 'rb'))
+    optimizers_scores = pickle.load(open(root_result_folder + pkl_file, 'rb'))
     optimizers_scores = filter_results_to_range(optimizers_scores)
 
     fig, ax = plt.subplots(1, 1, figsize=get_figsize(hf=0.5))
@@ -518,25 +491,21 @@ def plot_quadratic_jax_kappa_zeta_constant_beta(pkl_file="test_results/quadratic
     fig.legend(handles, labels, framealpha=0, frameon=False, loc="upper center", bbox_to_anchor=(0.5, 1.0), ncol=3, columnspacing=1.5, handletextpad=0.29)
     plt.subplots_adjust(top=0.85, bottom=0.23, left=0.15, right=0.99)
 
-    plt.savefig('figures/' + "quadratic_jax_kappa_zeta_constant_beta.pdf")
+    plt.savefig(output_folder + "quadratic_jax_kappa_zeta_constant_beta.pdf")
     #plt.show()
     plt.close(fig)
     rcParams.update(rcParamsDefault)
 
 
-def plot_quadratic_jax_kappa_zeta_constant_zeta_beta(pkl_file="test_results/quadratic_jax_kappa_zeta.pkl"):
-    rcParams['pdf.fonttype'] = 42
-    rcParams['ps.fonttype'] = 42
-    rcParams.update({'legend.fontsize': 5.4})
-    rcParams.update({'font.size': 5.8})
-    rcParams['axes.titlesize'] = 5.8
+def plot_quadratic_jax_kappa_zeta_constant_zeta_beta(pkl_file="quadratic_jax_kappa_zeta.pkl"):
+    set_rc_params()
 
     zeta_val = 80
     beta_val = 1.13
     optimizers_colors = {'Adam': 'tab:blue', 'HB': 'tab:orange', 'GD': 'tab:red',
                          'FOSI-Adam': 'tab:blue', 'FOSI-HB': 'tab:orange', 'FOSI-GD': 'tab:red'}
 
-    optimizers_scores = pickle.load(open(pkl_file, 'rb'))
+    optimizers_scores = pickle.load(open(root_result_folder + pkl_file, 'rb'))
     optimizers_scores = filter_results_to_range(optimizers_scores)
     fig, axs = plt.subplots(1, 2, figsize=get_figsize(hf=0.5))
 
@@ -592,18 +561,14 @@ def plot_quadratic_jax_kappa_zeta_constant_zeta_beta(pkl_file="test_results/quad
     fig.legend(handles, labels, framealpha=0, frameon=False, loc="upper center", bbox_to_anchor=(0.5, 1.03), ncol=3, columnspacing=1.5, handletextpad=0.29)
     plt.subplots_adjust(top=0.85, bottom=0.2, left=0.12, right=0.99, wspace=0.33)
 
-    plt.savefig('figures/' + "quadratic_jax_kappa_zeta_constant_zeta_beta.pdf")
+    plt.savefig(output_folder + "quadratic_jax_kappa_zeta_constant_zeta_beta.pdf")
     #plt.show()
     plt.close(fig)
     rcParams.update(rcParamsDefault)
 
 
 def plot_diagonals():
-    rcParams['pdf.fonttype'] = 42
-    rcParams['ps.fonttype'] = 42
-    rcParams.update({'legend.fontsize': 5.4})
-    rcParams.update({'font.size': 5.8})
-    rcParams['axes.titlesize'] = 5.8
+    set_rc_params()
 
     fig, ax = plt.subplots(1, 1, figsize=get_figsize(wf=0.7, hf=0.5))
     for idx, b in enumerate([1.1, 1.15, 1.16, 1.17]):
@@ -625,14 +590,14 @@ def plot_diagonals():
 
     plt.subplots_adjust(top=0.99, bottom=0.27, left=0.2, right=0.99)
 
-    plt.savefig('figures/' + "quadratic_jax_kappa_zeta_diagonals.pdf")
+    plt.savefig(output_folder + "quadratic_jax_kappa_zeta_diagonals.pdf")
     #plt.show()
     plt.close(fig)
     rcParams.update(rcParamsDefault)
 
 
 def plot_quadratic_jax_kappa_zeta_learning_rate(kappa=1.14, dim_non_diag=50):
-    lr_pkl_file_name = "test_results/quadratic_jax_kappa_zeta_lr_" + str(kappa).replace('.', '-') + '_' + str(dim_non_diag) + ".pkl"
+    lr_pkl_file_name = root_result_folder + "quadratic_jax_kappa_zeta_lr_" + str(kappa).replace('.', '-') + '_' + str(dim_non_diag) + ".pkl"
     optimizers_scores = pickle.load(open(lr_pkl_file_name, 'rb'))
 
     optimizers_colors = {'Adam': 'tab:blue', 'HB': 'tab:orange', 'GD': 'tab:red',
@@ -663,17 +628,13 @@ def plot_quadratic_jax_kappa_zeta_learning_rate(kappa=1.14, dim_non_diag=50):
     ax.set_ylabel(r'$f_{b=' + str(kappa) + r',\zeta=' + str(dim_non_diag) + r'}(\theta_{200})$')
     ax.set_title(r'$b=' + str(kappa) + r', \zeta=' + str(dim_non_diag) + '$')
     fig.legend()
-    fig.savefig('figures/' + 'quadratic_jax_kappa_zeta_lr_' + str(kappa).replace('.', '-') + '_' + str(dim_non_diag) + '.pdf')
+    fig.savefig(output_folder + 'quadratic_jax_kappa_zeta_lr_' + str(kappa).replace('.', '-') + '_' + str(dim_non_diag) + '.pdf')
     #plt.show()
     plt.close(fig)
 
 
 def plot_quadratic_jax_kappa_zeta_learning_rate_uni():
-    rcParams['pdf.fonttype'] = 42
-    rcParams['ps.fonttype'] = 42
-    rcParams.update({'legend.fontsize': 5.4})
-    rcParams.update({'font.size': 5.8})
-    rcParams['axes.titlesize'] = 5.8
+    set_rc_params()
 
     optimizers_colors = {'Adam': 'tab:blue', 'HB': 'tab:orange', 'GD': 'tab:red',
                          'FOSI-Adam': 'tab:blue', 'FOSI-HB (c=1)': 'tab:pink', 'FOSI-GD (c=1)': 'brown',
@@ -684,7 +645,7 @@ def plot_quadratic_jax_kappa_zeta_learning_rate_uni():
 
     kappa_dim_non_diag_tuples = zip([90, 90, 50, 50], [1.12, 1.16, 1.12, 1.16])
     for j, (dim_non_diag, kappa) in enumerate(kappa_dim_non_diag_tuples):
-        lr_pkl_file_name = "test_results/quadratic_jax_kappa_zeta_lr_" + str(kappa).replace('.', '-') + '_' + str(dim_non_diag) + ".pkl"
+        lr_pkl_file_name = root_result_folder + "quadratic_jax_kappa_zeta_lr_" + str(kappa).replace('.', '-') + '_' + str(dim_non_diag) + ".pkl"
         optimizers_scores = pickle.load(open(lr_pkl_file_name, 'rb'))
 
         ax = axs[j // 2][j % 2]
@@ -723,7 +684,7 @@ def plot_quadratic_jax_kappa_zeta_learning_rate_uni():
     fig.legend(handles, labels, framealpha=0, frameon=False, loc="upper center", bbox_to_anchor=(0.5, 1.0), ncol=3, columnspacing=1.5, handletextpad=0.29)
     plt.subplots_adjust(top=0.87, bottom=0.13, left=0.14, right=0.99, wspace=0.2)
 
-    plt.savefig('figures/' + "quadratic_jax_kappa_zeta_lr.pdf")
+    plt.savefig(output_folder + "quadratic_jax_kappa_zeta_lr.pdf")
     #plt.show()
     plt.close(fig)
     rcParams.update(rcParamsDefault)
@@ -732,11 +693,7 @@ def plot_quadratic_jax_kappa_zeta_learning_rate_uni():
 def plot_quadratic_jax_kappa_zeta_learning_rate_single_func():
     kappa_dim_non_diag_tuples = zip([90], [1.12])
 
-    rcParams['pdf.fonttype'] = 42
-    rcParams['ps.fonttype'] = 42
-    rcParams.update({'legend.fontsize': 5.4})
-    rcParams.update({'font.size': 5.8})
-    rcParams['axes.titlesize'] = 5.8
+    set_rc_params()
 
     optimizers_colors = {'Adam': 'black', 'HB': 'black', 'GD': 'black',
                          'FOSI-Adam': 'tab:blue', 'FOSI-HB (c=1)': 'tab:orange',
@@ -747,7 +704,7 @@ def plot_quadratic_jax_kappa_zeta_learning_rate_single_func():
 
     dim_non_diag, kappa = next(kappa_dim_non_diag_tuples)
 
-    lr_pkl_file_name = "test_results/quadratic_jax_kappa_zeta_lr_" + str(kappa).replace('.', '-') + '_' + str(dim_non_diag) + ".pkl"
+    lr_pkl_file_name = root_result_folder + "quadratic_jax_kappa_zeta_lr_" + str(kappa).replace('.', '-') + '_' + str(dim_non_diag) + ".pkl"
     optimizers_scores = pickle.load(open(lr_pkl_file_name, 'rb'))
 
     for idx, optimizer_name in enumerate(['Adam', 'HB', 'GD']):
@@ -790,16 +747,27 @@ def plot_quadratic_jax_kappa_zeta_learning_rate_single_func():
         ax.legend(loc="upper center", bbox_to_anchor=(0.5, 1.6), frameon=False)
 
     plt.subplots_adjust(top=0.72, bottom=0.2, left=0.14, right=0.99, wspace=0.2)
-    plt.savefig('figures/' + "quadratic_jax_kappa_zeta_lr_single_func.pdf")
+    plt.savefig(output_folder + "quadratic_jax_kappa_zeta_lr_single_func.pdf")
     plt.close(fig)
     rcParams.update(rcParamsDefault)
 
 
 if __name__ == "__main__":
+
+    if len(sys.argv) > 1:
+        root_result_folder = sys.argv[1] + '/test_results/'
+    else:
+        root_result_folder = '../quadratic/test_results/'
+    output_folder = './figures/'
+
+    # Random orthogonal basis, different dimension and lambda_1
     plot_quadratic_random_orthogonal_basis()
     plot_quadratic_random_orthogonal_basis_4_funcs()
+
+    # GD and FOSI-GD, for effective condition number larger than the original one
     plot_quadratic_random_orthogonal_basis_gd()
 
+    # Function with different kappa (condition number) and zeta (non diagonally dominant fraction)
     plot_quadratic_jax_kappa_zeta()
     plot_quadratic_jax_kappa_zeta_per_optimizer()
     plot_quadratic_jax_kappa_zeta_learning_curves()
@@ -808,6 +776,7 @@ if __name__ == "__main__":
     plot_quadratic_jax_kappa_zeta_constant_zeta_beta()
     plot_diagonals()
 
+    # Learning rate impact
     kappa_dim_non_diag_tuples = zip([90, 90, 50, 50], [1.12, 1.16, 1.12, 1.16])
     for dim_non_diag, kappa in kappa_dim_non_diag_tuples:
         plot_quadratic_jax_kappa_zeta_learning_rate(kappa, dim_non_diag)

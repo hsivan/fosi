@@ -70,9 +70,10 @@ python quadratic_jax_kappa_zeta.py
 
 After running all the experiments, run the following to generate the figures:
 ```bash
+cd <fosi_root>/experiments/visualization
 python plot_quadratic.py
 ```
-The figures can be found under `<fosi_root>/experiments/quadratic/figures`.
+The figures can be found under `<fosi_root>/experiments/visualization/figures`.
 
 
 ## Deep neural networks
@@ -93,15 +94,17 @@ python mobilenet_audioset.py
 
 After running all the experiments, run the following to generate the figures:
 ```bash
+cd <fosi_root>/experiments/visualization
 python plot_dnn.py
 ```
-The figures can be found under `<fosi_root>/experiments/dnn/figures`.
+The figures can be found under `<fosi_root>/experiments/visualization/figures`.
 
 To generate loss and accuracy summary tables run:
 ```bash
+cd <fosi_root>/experiments/visualization
 python generate_result_summary.py
 ```
-The script generates four `*_summary.csv` files with the relevant information.
+The script generates `*_summary.csv` files with the relevant information under `<fosi_root>/experiments/visualization/result_summary`.
 
 
 ## Run as a docker container
@@ -128,12 +131,6 @@ sudo docker run --gpus all -v ${local_result_dir}:${docker_result_dir} --rm fosi
 ```
 
 The result folders and files can be found in the same location as running the experiments without Docker, under `<fosi_root>/experiments/quadratic`.
-To generate figures run:
-```bash
-cd <fosi_root>/experiments/quadratic
-python plot_quadratic.py
-```
-The figures can be found under `<fosi_root>/experiments/quadratic/figures`.
 
 ### Deep neural networks
 The docker supports running the experiments `logistic_regression_mnist`, `transfer_learning_cifar10`, `autoencoder_cifar10`, `rnn_shakespeare`, and `mobilenet_audioset`.
@@ -147,10 +144,22 @@ sudo docker run --gpus all -v ${local_result_dir}:${docker_result_dir} --rm fosi
 ```
 
 The result folders and files can be found in the same location as running the experiments without Docker, under `<fosi_root>/experiments/dnn`.
-To generate figures and loss and accuracy summary tables run:
+
+### Figures and summary tables
+
+To generate figures run:
 ```bash
-cd <fosi_root>/experiments/dnn
-python plot_dnn.py
-python generate_result_summary.py
+export local_result_dir=$(pwd)"/experiments/visualization/figures"
+export docker_result_dir="/app/experiments/figures"
+sudo docker run -v ${local_result_dir}:${docker_result_dir} --rm fosi_experiment python3 /app/experiments/visualization/plot_dnn.py /app/experiments/dnn
+sudo docker run -v ${local_result_dir}:${docker_result_dir} --rm fosi_experiment python3 /app/experiments/visualization/plot_quadratic.py /app/experiments/quadratic
 ```
-The figures can be found under `<fosi_root>/experiments/dnn/figures` and four summary tables `*_summary.csv` are in `<fosi_root>/experiments/dnn`.
+The figures can be found under `<fosi_root>/experiments/visualization/figures`.
+
+To generate loss and accuracy summary tables run:
+```bash
+export local_result_dir=$(pwd)"/experiments/visualization/result_summary"
+export docker_result_dir="/app/experiments/result_summary"
+sudo docker run -v ${local_result_dir}:${docker_result_dir} --rm fosi_experiment python3 /app/experiments/visualization/generate_result_summary.py /app/experiments/dnn
+```
+The summary tables `*_summary.csv` can be found under `<fosi_root>/experiments/visualization/result_summary`.

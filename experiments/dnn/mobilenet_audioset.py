@@ -22,9 +22,7 @@ from jax.lib import xla_bridge
 import haiku as hk
 from haiku.nets import MobileNetV1
 
-from fosi import fosi_momentum, fosi_adam
-from experiments.utils.test_utils import start_test, get_config, write_config_to_file
-
+from experiments.dnn.dnn_test_utils import start_test, get_config, write_config_to_file, get_optimizer
 
 print(jax.local_devices())
 print(xla_bridge.get_backend().platform)
@@ -177,29 +175,7 @@ def train_mobilenet(optimizer_name):
     x = jnp.expand_dims(x, axis=0)
     net_params, state = model.init(random.PRNGKey(111), x, is_training=True)
 
-    def get_optimizer():
-        if conf["optimizer"] == 'momentum':
-            return optax.sgd(conf["learning_rate"], momentum=conf["momentum"], nesterov=False)
-        elif conf["optimizer"] == 'my_momentum':
-            return fosi_momentum(optax.sgd(conf["learning_rate"], momentum=conf["momentum"], nesterov=False), loss_fn, batch,
-                                 decay=conf["momentum"],
-                                 num_iters_to_approx_eigs=conf["num_iterations_between_ese"],
-                                 approx_k=conf["approx_k"],
-                                 approx_l=conf["approx_l"], warmup_w=conf["num_warmup_iterations"],
-                                 alpha=conf["alpha"], learning_rate_clip=3.0)
-        elif conf["optimizer"] == 'adam':
-            return optax.adam(conf["learning_rate"])
-        elif conf["optimizer"] == 'my_adam':
-            return fosi_adam(optax.adam(conf["learning_rate"]), loss_fn, batch,
-                             decay=conf["momentum"],
-                             num_iters_to_approx_eigs=conf["num_iterations_between_ese"],
-                             approx_k=conf["approx_k"],
-                             approx_l=conf["approx_l"], warmup_w=conf["num_warmup_iterations"],
-                             alpha=conf["alpha"])
-        else:
-            raise "Illegal optimizer " + conf["optimizer"]
-
-    optimizer = get_optimizer()
+    optimizer = get_optimizer(conf, loss_fn, batch)
     opt_state = optimizer.init(net_params)
 
     ###############################    Training    ###############################

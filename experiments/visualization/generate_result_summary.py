@@ -1,19 +1,25 @@
 import os
+import sys
 import numpy as np
 import pandas as pd
+from experiments.visualization.plot_dnn import get_test_folders
+
+
+if not os.path.isdir('./result_summary'):
+    os.makedirs('./result_summary')
 
 
 def create_loss_summary_table(test_result_root_folders, dataset_type='val'):
     precision = '%0.3f'
 
-    loss_summary_file_name = dataset_type + "_loss_summary.csv"
+    loss_summary_file_name = './result_summary/' + dataset_type + "_loss_summary.csv"
 
     with open(loss_summary_file_name, 'w') as f:
         f.write('Task & HB & FOSI HB & Adam & FOSI Adam' + r' \\' + '\n')
         f.write(r'\midrule' + '\n' + r'\arrayrulecolor{lightgray}' + '\n')
 
     for task, test_result_root_folder in test_result_root_folders.items():
-        test_folders = [test_result_root_folder + f for f in os.listdir(test_result_root_folder) if f.startswith('results')]
+        test_folders = get_test_folders(test_result_root_folder)
 
         for test_folder in test_folders:
             df = pd.read_csv(test_folder + '/train_stats.csv')
@@ -59,14 +65,14 @@ def create_wall_time_to_loss_summary_table(dataset_type='val'):
 
     fosi_improvement = {'adam': [], 'momentum': []}
 
-    wall_time_summary_file_name = dataset_type + "_wall_time_to_loss_summary.csv"
+    wall_time_summary_file_name = './result_summary/' + dataset_type + "_wall_time_to_loss_summary.csv"
     with open(wall_time_summary_file_name, 'w') as f:
         f.write('Task & HB & FOSI HB & Adam & FOSI Adam' + r' \\' + '\n')
         f.write(r'\midrule' + '\n' + r'\arrayrulecolor{lightgray}' + '\n')
 
     for task, test_result_root_folder in test_result_root_folders.items():
 
-        test_folders = [test_result_root_folder + f for f in os.listdir(test_result_root_folder) if f.startswith('results')]
+        test_folders = get_test_folders(test_result_root_folder)
 
         for optimizer_technique in ['adam', 'momentum']:
             base_test_folder = [f for f in test_folders if 'results_' + optimizer_technique in f][0]
@@ -130,14 +136,14 @@ def create_wall_time_to_acc_summary_table(dataset_type='val'):
 
     fosi_improvement = {'adam': [], 'momentum': []}
 
-    wall_time_summary_file_name = dataset_type + "_wall_time_to_acc_summary.csv"
+    wall_time_summary_file_name = './result_summary/' + dataset_type + "_wall_time_to_acc_summary.csv"
     with open(wall_time_summary_file_name, 'w') as f:
         f.write('Task & HB & FOSI HB & Adam & FOSI Adam' + r' \\' + '\n')
         f.write(r'\midrule' + '\n' + r'\arrayrulecolor{lightgray}' + '\n')
 
     for task, test_result_root_folder in test_result_root_folders.items():
 
-        test_folders = [test_result_root_folder + f for f in os.listdir(test_result_root_folder) if f.startswith('results')]
+        test_folders = get_test_folders(test_result_root_folder)
 
         for optimizer_technique in ['adam', 'momentum']:
             base_test_folder = [f for f in test_folders if 'results_' + optimizer_technique in f][0]
@@ -213,11 +219,16 @@ def create_wall_time_to_acc_summary_table(dataset_type='val'):
 
 if __name__ == "__main__":
 
-    test_result_root_folders = {'AC': './test_results_mobilenet_audioset/',
-                                'LM': './test_results_rnn_shakespeare/',
-                                'AE': './test_results_autoencoder_cifar10/',
-                                'TL': './test_results_transfer_learning_cifar10/',
-                                'LR': './test_results_logistic_regression_mnist/'}
+    if len(sys.argv) > 1:
+        root_result_folder = sys.argv[1] + '/'
+    else:
+        root_result_folder = '../dnn/'
+
+    test_result_root_folders = {'AC': root_result_folder + 'test_results_mobilenet_audioset/',
+                                'LM': root_result_folder + 'test_results_rnn_shakespeare/',
+                                'AE': root_result_folder + 'test_results_autoencoder_cifar10/',
+                                'TL': root_result_folder + 'test_results_transfer_learning_cifar10/',
+                                'LR': root_result_folder + 'test_results_logistic_regression_mnist/'}
 
     create_loss_summary_table(test_result_root_folders, dataset_type='train')
     create_loss_summary_table(test_result_root_folders, dataset_type='val')

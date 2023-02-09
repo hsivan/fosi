@@ -5,8 +5,8 @@ from jax import random
 from jax.config import config
 
 from fosi import get_ese_fn
-from experiments.quadratic.plot_quadratic import plot_quadratic_random_orthogonal_basis_gd
-from quadratic_jax_kappa_zeta import gd_update, fosi_gd_update, optimize, fill_diagonal, get_x_initial, objective
+from experiments.quadratic.quadratic_test_utils import fill_diagonal, get_x_initial, objective, optimize, gd_update, \
+    fosi_gd_update
 
 config.update("jax_enable_x64", True)
 
@@ -75,4 +75,3 @@ def optimize_quadratic_func_with_gd_and_fosi_gd():
 
 if __name__ == "__main__":
     optimize_quadratic_func_with_gd_and_fosi_gd()
-    plot_quadratic_random_orthogonal_basis_gd()

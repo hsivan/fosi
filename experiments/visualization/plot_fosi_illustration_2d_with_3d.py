@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib import cm
 
-from experiments.utils.visualization_utils import get_figsize
+from experiments.visualization.visualization_utils import get_figsize
 
 V = np.array([[1/np.sqrt(2), -1/np.sqrt(2)], [1/np.sqrt(2), 1/np.sqrt(2)]])
 Q = np.array([[4.0, 0.0], [0.0, 1.0]])

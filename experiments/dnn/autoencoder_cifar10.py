@@ -22,8 +22,7 @@ from flax import linen as nn
 from flax.training import train_state
 import optax
 
-from fosi import fosi_adam, fosi_momentum
-from experiments.utils.test_utils import start_test, get_config, write_config_to_file
+from experiments.dnn.dnn_test_utils import start_test, get_config, write_config_to_file, get_optimizer
 
 # Path to the folder where the datasets are/should be downloaded
 DATASET_PATH = "./cifar10_dataset"
@@ -264,45 +263,16 @@ class TrainerModule:
         rng, init_rng = jax.random.split(rng)
         params = self.model.init(init_rng, self.exmp_imgs)['params']
 
-        batch = next(iter(train_loader))
         loss_fn = lambda params, batch: mse_recon_loss(self.model, params, batch)
 
         # Initialize learning rate schedule and optimizer
         print("len(train_loader)", len(train_loader))
 
-        if conf["optimizer"] == 'adam':
-            optimizer = optax.chain(
-                optax.clip(1.0),  # Clip gradients at 1
-                optax.adam(self.conf['learning_rate'])
-            )
-        elif conf["optimizer"] == 'my_adam':
-            optimizer = optax.chain(
-                optax.clip(1.0),  # Clip gradients at 1
-                fosi_adam(optax.adam(conf["learning_rate"]), loss_fn, batch,
-                          decay=conf["momentum"],
-                          num_iters_to_approx_eigs=conf["num_iterations_between_ese"],
-                          approx_k=conf["approx_k"],
-                          approx_l=conf["approx_l"], warmup_w=conf["num_warmup_iterations"],
-                          alpha=conf["alpha"])
-            )
-        elif conf["optimizer"] == 'momentum':
-            optimizer = optax.chain(
-                optax.clip(1.0),  # Clip gradients at 1
-                optax.sgd(conf["learning_rate"], momentum=0.9, nesterov=False)
-            )
-        elif conf["optimizer"] == 'my_momentum':
-            optimizer = optax.chain(
-                optax.clip(1.0),  # Clip gradients at 1
-                fosi_momentum(optax.sgd(conf["learning_rate"], momentum=conf["momentum"], nesterov=False), loss_fn,
-                              batch,
-                              decay=conf["momentum"],
-                              num_iters_to_approx_eigs=conf["num_iterations_between_ese"],
-                              approx_k=conf["approx_k"],
-                              approx_l=conf["approx_l"], warmup_w=conf["num_warmup_iterations"],
-                              alpha=conf["alpha"], learning_rate_clip=1.0)
-            )
-        else:
-            raise "Illegal optimizer " + conf["optimizer"]
+        optimizer = optax.chain(
+            optax.clip(1.0),  # Clip gradients at 1
+            get_optimizer(conf, loss_fn, next(iter(train_loader)))
+        )
+
         # Initialize training state
         self.state = train_state.TrainState.create(apply_fn=self.model.apply, params=params, tx=optimizer)
 
@@ -364,7 +334,7 @@ def train_cifar(latent_dim, conf=None):
 for optimizer_name in ['my_momentum', 'momentum', 'my_adam', 'adam']:
     # Heavy-Ball (momentum) diverges with learning rate 1e-2. Using 1e-3 instead.
     conf = get_config(optimizer=optimizer_name, approx_k=10, batch_size=256, learning_rate=1e-3,
-                      num_iterations_between_ese=800, approx_l=0, alpha=0.01)
+                      num_iterations_between_ese=800, approx_l=0, alpha=0.01, learning_rate_clip=1.0)
     test_folder = start_test(conf["optimizer"], test_folder='test_results_autoencoder_cifar10')
     write_config_to_file(test_folder, conf)
 

@@ -1,4 +1,6 @@
 import os
+from matplotlib import rcParams
+
 
 if not os.path.isdir('./figures'):
     os.makedirs('./figures')
@@ -23,3 +25,10 @@ def get_figsize(columnwidth=234.8775, wf=1.0, hf=(5. ** 0.5 - 1.0) / 2.0, b_fixe
         fig_height = hf
     return [fig_width, fig_height]
 
+
+def set_rc_params():
+    rcParams['pdf.fonttype'] = 42
+    rcParams['ps.fonttype'] = 42
+    rcParams.update({'legend.fontsize': 5.4})
+    rcParams.update({'font.size': 5.8})
+    rcParams['axes.titlesize'] = 5.8
