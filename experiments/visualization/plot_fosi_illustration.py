@@ -41,7 +41,7 @@ def grad(X):
     return res
 
 
-def draw_fosi_illustration_2d():
+def plot_illustration():
     rcParams['pdf.fonttype'] = 42
     rcParams['ps.fonttype'] = 42
     rcParams.update({'legend.fontsize': 5.4})
@@ -183,7 +183,6 @@ def draw_fosi_illustration_2d():
         ax.tick_params(width=0.5)
 
     fig1.subplots_adjust(top=0.96, bottom=0.14, left=0.14, right=0.98, wspace=0.20)
-
     fig2.subplots_adjust(top=0.96, bottom=0.14, left=0.14, right=0.98, wspace=0.20)
     fig3.subplots_adjust(top=0.96, bottom=0.14, left=0.14, right=0.98, wspace=0.20)
     fig1.savefig('figures/' + 'fosi_illustration_f.pdf')
@@ -197,4 +196,4 @@ def draw_fosi_illustration_2d():
 
 
 if __name__ == "__main__":
-    draw_fosi_illustration_2d()
+    plot_illustration()

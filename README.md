@@ -8,7 +8,7 @@ then using Newton's method to optimize one and the base optimizer to optimize th
 Our analysis of FOSI’s preconditioner and effective Hessian proves that FOSI improves the condition number for a large family of optimizers.
 Our empirical evaluation demonstrates that FOSI improves the convergence rate and optimization time of GD, Heavy-Ball, and Adam when applied to several deep neural networks training tasks such as audio classification, transfer learning, and object classification and when applied to convex functions.
 
-For more information, see our ICML 2023 paper, [FOSI: Hybrid First and Second Order Optimization](TODO).
+For more information, see our paper, [FOSI: Hybrid First and Second Order Optimization](https://arxiv.org/pdf/2302.08484.pdf).
 
 ## Installation
 
@@ -125,12 +125,12 @@ The full [instructions](experiments/README.md) and scripts are in the `experimen
 If AutoMon has been useful for your research, and you would like to cite it in an academic
 publication, please use the following Bibtex entry:
 ```bibtex
-@inproceedings{sivan_fosi_2023,
-  author    = {Sivan, Hadar and Gabel, Moshe and Schuster, Assaf},
-  title     = {{FOSI}: Hybrid First and Second Order Optimization},
-  year      = {2023},
-  series    = {ICML '23},
-  booktitle = {Proceedings of the 2022 {ICML} International Conference on Machine Learning},
-  note      = {to appear}
+@misc{sivan_fosi_2023,
+  author = {Sivan, Hadar and Gabel, Moshe and Schuster, Assaf},
+  title = {FOSI: Hybrid First and Second Order Optimization},
+  year = {2023},
+  doi = {10.48550/ARXIV.2302.08484},
+  url = {https://arxiv.org/abs/2302.08484},
+  publisher = {arXiv},
 }
 ```
