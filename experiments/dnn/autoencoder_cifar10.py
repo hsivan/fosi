@@ -9,11 +9,9 @@ os.environ['JAX_DEFAULT_DTYPE_BITS'] = '32'
 import csv
 import numpy as np
 from tqdm.auto import tqdm
-import matplotlib.pyplot as plt
 from timeit import default_timer as timer
 
 import torch.utils.data as data
-import torchvision
 from torchvision.datasets import CIFAR10
 import torch
 import jax
@@ -189,40 +187,6 @@ def mse_recon_loss(model, params, batch):
     return loss
 
 
-def compare_imgs(img1, img2, title_prefix=""):
-    # Calculate MSE loss between both images
-    loss = ((img1 - img2) ** 2).sum()
-    # Plot images for visual comparison
-    imgs = jax_to_torch(np.stack([img1, img2], axis=0))
-    grid = torchvision.utils.make_grid(imgs, nrow=2, normalize=True, value_range=(-1, 1))
-    grid = grid.permute(1, 2, 0)
-    fig = plt.figure(figsize=(4, 2))
-    plt.title(f"{title_prefix} Loss: {loss.item():4.2f}")
-    plt.imshow(grid)
-    plt.axis('off')
-    # plt.show()
-    plt.close(fig)
-
-
-for i in range(2):
-    # Load example image
-    img, _ = train_dataset[i]
-    img_mean = img.mean(axis=(0, 1), keepdims=True)
-
-    # Shift image by one pixel
-    SHIFT = 1
-    img_shifted = np.roll(img, shift=SHIFT, axis=0)
-    img_shifted = np.roll(img_shifted, shift=SHIFT, axis=1)
-    img_shifted[:1, :, :] = img_mean
-    img_shifted[:, :1, :] = img_mean
-    compare_imgs(img, img_shifted, "Shifted -")
-
-    # Set half of the image to zero
-    img_masked = np.copy(img)
-    img_masked[:img_masked.shape[1] // 2, :, :] = img_mean
-    compare_imgs(img, img_masked, "Masked -")
-
-
 class TrainerModule:
 
     def __init__(self, c_hid, latent_dim, conf, seed=42):
@@ -331,16 +295,17 @@ def train_cifar(latent_dim, conf=None):
     return trainer, test_loss
 
 
-for optimizer_name in ['my_momentum', 'momentum', 'my_adam', 'adam']:
-    # Heavy-Ball (momentum) diverges with learning rate 1e-2. Using 1e-3 instead.
-    conf = get_config(optimizer=optimizer_name, approx_k=10, batch_size=256, learning_rate=1e-3,
-                      num_iterations_between_ese=800, approx_l=0, alpha=0.01, learning_rate_clip=1.0)
-    test_folder = start_test(conf["optimizer"], test_folder='test_results_autoencoder_cifar10')
-    write_config_to_file(test_folder, conf)
+if __name__ == "__main__":
+    for optimizer_name in ['my_momentum', 'momentum', 'my_adam', 'adam']:
+        # Heavy-Ball (momentum) diverges with learning rate 1e-2. Using 1e-3 instead.
+        conf = get_config(optimizer=optimizer_name, approx_k=10, batch_size=256, learning_rate=1e-3,
+                          num_iterations_between_ese=800, approx_l=0, alpha=0.01, learning_rate_clip=1.0)
+        test_folder = start_test(conf["optimizer"], test_folder='test_results_autoencoder_cifar10')
+        write_config_to_file(test_folder, conf)
 
-    train_stats_file = test_folder + "/train_stats.csv"
-    with open(train_stats_file, 'w') as f:
-        writer = csv.writer(f)
-        writer.writerow(["epoch", "train_loss", "val_loss", "latency", "wall_time"])
+        train_stats_file = test_folder + "/train_stats.csv"
+        with open(train_stats_file, 'w') as f:
+            writer = csv.writer(f)
+            writer.writerow(["epoch", "train_loss", "val_loss", "latency", "wall_time"])
 
-    _, _ = train_cifar(128, conf=conf)
+        _, _ = train_cifar(128, conf=conf)

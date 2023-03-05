@@ -2,6 +2,9 @@ import os
 # Note: To maintain the default precision as 32-bit and not switch to 64-bit, set the following flag prior to any
 # imports of JAX. This is necessary as the jax_enable_x64 flag is later set to True inside the Lanczos algorithm.
 # See: https://github.com/google/jax/issues/8178
+
+from experiments.dnn.logistic_regression_mnist import get_normalized_dataset, Model, data_generator
+
 os.environ['JAX_DEFAULT_DTYPE_BITS'] = '32'
 
 import csv
@@ -9,68 +12,18 @@ import jax
 import numpy as np
 from timeit import default_timer as timer
 
-import optax
 import jax.numpy as jnp
 from jax import random
-from jax import value_and_grad
 from jax import jit
-from jax.example_libraries import stax
-from jax.example_libraries.stax import Dense, Flatten, LogSoftmax
-from tensorflow.keras.datasets import mnist
+import kfac_jax
 
-from experiments.dnn.dnn_test_utils import start_test, get_config, write_config_to_file, get_optimizer
+from experiments.dnn.dnn_test_utils import start_test, get_config, write_config_to_file
 
 print(jax.local_devices())
 
 
-def data_generator(images, labels, batch_size=128, is_valid=False):
-    # 1. Calculate the total number of batches
-    num_batches = int(np.ceil(len(images) / batch_size))
+def train_mnist(optimizer_name, learning_rate, momentum):
 
-    # 2. Get the indices and shuffle them
-    indices = np.arange(len(images))
-
-    if not is_valid:
-        # Shuffle the data for training (not required for validation).
-        np.random.shuffle(indices)
-
-    for batch in range(num_batches):
-        curr_idx = indices[batch * batch_size: (batch + 1) * batch_size]
-        batch_images = images[curr_idx]
-        batch_labels = labels[curr_idx]
-
-        yield batch_images, batch_labels
-
-
-def get_normalized_dataset():
-    # The downloaded dataset consists of two tuples. The first tuple represents the training data consisting
-    # of pairs of images and labels. Similarly, the second tuple consists of validation/test data.
-    (x_train, y_train), (x_valid, y_valid) = mnist.load_data()
-    print(f"\nNumber of training samples: {len(x_train)} with samples shape: {x_train.shape[1:]}")
-    print(f"Number of validation samples: {len(x_valid)} with samples shape: {x_valid.shape[1:]}")
-
-    # Normalize the image pixels in the range [0, 1]
-    x_train_normalized = jnp.array(x_train / 255.)
-    x_valid_normalized = jnp.array(x_valid / 255.)
-
-    # One hot encoding applied to the labels. We have 10 classes in the dataset, hence the depth of OHE would be 10.
-    y_train_ohe = jnp.squeeze(jax.nn.one_hot(y_train, num_classes=10))
-    y_valid_ohe = jnp.squeeze(jax.nn.one_hot(y_valid, num_classes=10))
-
-    print(f"Training images shape:   {x_train_normalized.shape}  Labels shape: {y_train_ohe.shape}")
-    print(f"Validation images shape: {x_valid_normalized.shape}  Labels shape: {y_valid_ohe.shape}")
-
-    return x_train_normalized, y_train_ohe, x_valid_normalized, y_valid_ohe
-
-
-def Model(num_classes=10):
-    return stax.serial(
-        Flatten, Dense(num_classes), LogSoftmax)
-
-
-def train_mnist(optimizer_name):
-
-    @jit
     def loss_fn(params, batch_data):
         """ Implements cross-entropy loss function.
 
@@ -81,9 +34,12 @@ def train_mnist(optimizer_name):
             Loss calculated for the current batch
         """
         inputs, targets = batch_data
-        preds = net_apply(params, inputs)
-        return -jnp.mean(jnp.sum(preds * targets, axis=1))
+        logits = net_apply(params, inputs)
+        kfac_jax.register_softmax_cross_entropy_loss(logits, targets)
+        log_p = jax.nn.log_softmax(logits, axis=-1)
+        return -jnp.mean(jnp.sum(log_p * targets, axis=1))
 
+    @jit
     def calculate_accuracy(params, batch_data):
         """ Implements accuracy metric.
 
@@ -112,25 +68,6 @@ def train_mnist(optimizer_name):
         batch_accuracy = calculate_accuracy(params, batch_data)
         return batch_loss, batch_accuracy
 
-    @jit
-    def train_step(opt_state, params, batch_data):
-        """ Implements train step.
-
-        Args:
-            opt_state: Current state of the optimizer
-            params: Network parameters
-            batch_data: A batch of data (images and labels)
-        Returns:
-            Batch loss, batch accuracy, updated optimizer state
-        """
-        batch_loss, batch_gradients = value_and_grad(loss_fn)(params, batch_data)
-        batch_accuracy = calculate_accuracy(params, batch_data)
-
-        deltas, opt_state = optimizer.update(batch_gradients, opt_state, params)
-        params = optax.apply_updates(params, deltas)
-
-        return batch_loss, batch_accuracy, opt_state, params
-
     np.random.seed(1234)
     x_train_normalized, y_train_ohe, x_valid_normalized, y_valid_ohe = get_normalized_dataset()
     net_init, net_apply = Model(num_classes=10)
@@ -140,8 +77,7 @@ def train_mnist(optimizer_name):
     num_valid_batches = len(x_valid_normalized) // batch_size
     print("num_train_batches:", num_train_batches, "num_valid_batches:", num_valid_batches)
 
-    learning_rate = 1e-1 if 'momentum' in optimizer_name else 1e-3
-    conf = get_config(optimizer=optimizer_name, approx_k=10, batch_size=batch_size,
+    conf = get_config(optimizer=optimizer_name, approx_k=10, batch_size=batch_size, momentum=momentum,
                       learning_rate=learning_rate, num_iterations_between_ese=800, approx_l=0, alpha=0.01,
                       num_warmup_iterations=num_train_batches)
     test_folder = start_test(conf["optimizer"], test_folder="test_results_logistic_regression_mnist")
@@ -154,8 +90,21 @@ def train_mnist(optimizer_name):
 
     train_data_gen = data_generator(x_train_normalized, y_train_ohe, batch_size=conf["batch_size"], is_valid=True)
 
-    optimizer = get_optimizer(conf, loss_fn, list(train_data_gen)[0])
-    opt_state = optimizer.init(net_params)
+    # Use static learning_rate and momentum
+    optimizer = kfac_jax.Optimizer(
+        value_and_grad_func=jax.value_and_grad(loss_fn),
+        l2_reg=0.0,
+        value_func_has_aux=False,
+        value_func_has_state=False,
+        use_adaptive_learning_rate=True if conf["learning_rate"] is None else False,
+        use_adaptive_momentum=True if conf["momentum"] is None else False,
+        use_adaptive_damping=True,
+        initial_damping=1.0,
+        multi_device=False
+    )
+    rng = jax.random.PRNGKey(42)
+    rng, key = jax.random.split(rng)
+    opt_state = optimizer.init(net_params, key, list(train_data_gen)[0])
 
     ###############################    Training    ###############################
 
@@ -182,7 +131,11 @@ def train_mnist(optimizer_name):
         for step in range(num_train_batches):
             iteration_start = timer()
             batch_data = next(train_data_gen)
-            loss_value, acc, opt_state, net_params = train_step(opt_state, net_params, batch_data)
+            rng, key = jax.random.split(rng)
+            net_params, opt_state, stats = optimizer.step(net_params, opt_state, key, batch=batch_data, global_step_int=i*num_train_batches+step,
+                                                          learning_rate=conf["learning_rate"], momentum=conf["momentum"])
+            loss_value = stats['loss']
+            acc = calculate_accuracy(net_params, batch_data)
             iteration_end = timer()
 
             train_batch_loss.append(loss_value)
@@ -214,7 +167,19 @@ def train_mnist(optimizer_name):
                 [i, epoch_train_loss, epoch_train_acc, epoch_valid_loss, epoch_valid_acc, epoch_end - epoch_start,
                  np.maximum(0, timer() - start_time)])
 
+        # Early stopping if loss_value is inf or None or just too high
+        if jnp.isnan(epoch_train_loss) or not jnp.isfinite(epoch_train_loss) or epoch_train_loss > 1000:
+            print("Early stopping with train loss", epoch_train_loss)
+            break
+
 
 if __name__ == "__main__":
-    for optimizer_name in ['my_adam', 'my_momentum', 'adam', 'momentum']:
-        train_mnist(optimizer_name)
+    # None learning_rate indicates the optimizer to set use_adaptive_learning_rate to True and
+    # None momentum to set use_adaptive_momentum to True
+    learning_rates = [None, 1e-3, 1e-2, 1e-1]
+    momentums = [None, 0.1, 0.5, 0.9]
+
+    # min_loss: 0.22080655 best_learning_rate: 0.001 best_momentum: 0.9
+    for learning_rate in learning_rates:
+        for momentum in momentums:
+            train_mnist('kfac', learning_rate, momentum)

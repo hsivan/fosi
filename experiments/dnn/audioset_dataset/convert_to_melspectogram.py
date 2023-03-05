@@ -1,5 +1,8 @@
 # Based on https://github.com/tensorflow/models/blob/master/research/audioset/vggish/mel_features.py
 
+import os
+os.environ["KMP_DUPLICATE_LIB_OK"]="TRUE"
+
 import csv
 import os
 import numpy as np
@@ -329,6 +332,9 @@ if __name__ == "__main__":
 
         wav_files_dir = './' + dataset_type + '_wav'
         jpg_files_fir = './' + dataset_type + '_jpg'
+
+        if not os.path.isdir(jpg_files_fir):
+            os.makedirs(jpg_files_fir)
 
         wav_files = os.listdir(wav_files_dir)
 

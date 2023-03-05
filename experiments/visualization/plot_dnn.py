@@ -10,8 +10,43 @@ from experiments.visualization.visualization_utils import get_figsize, set_rc_pa
 mapping = {'adam': ('tab:blue', '--', 'Adam'),
            'my_adam': ('tab:blue', '-', 'FOSI-Adam'),
            'momentum': ('tab:orange', '--', 'HB'),
-           'my_momentum': ('tab:orange', '-', 'FOSI-HB')
+           'my_momentum': ('tab:orange', '-', 'FOSI-HB'),
+           'kfac': ('tab:red', '-', 'K-FAC')
            }
+
+
+def read_config_file(test_folder):
+    with open(test_folder + "/config.txt") as conf_file:
+        conf = conf_file.read()
+    conf = eval(conf)
+    return conf
+
+
+def get_kfac_best_config_test_folder(test_result_root_folder, learning_rates, momentums):
+    # Find the configuration that obtained the smallest loss value and return the corresponding result folder
+    min_loss = np.inf
+    best_result_folder = None
+    best_learning_rate, best_momentum = None, None
+
+    for learning_rate in learning_rates:
+        for momentum in momentums:
+            # Find the last result folder with learning_rate and momentum
+            test_folders = [test_result_root_folder + f for f in os.listdir(test_result_root_folder) if
+                            f.startswith('results_kfac_')]
+            test_folders.sort()
+            for test_folder in test_folders[::-1]:
+                conf = read_config_file(test_folder)
+                if conf["learning_rate"] == learning_rate and conf["momentum"] == momentum:
+                    # Read train_stats.csv file and get the best loss (smallest)
+                    df = pd.read_csv(test_folder + '/train_stats.csv')
+                    if np.min(df['train_loss']) < min_loss:
+                        min_loss = np.min(df['train_loss'])
+                        best_result_folder = test_folder
+                        best_learning_rate, best_momentum = learning_rate, momentum
+                    break
+
+    print("best_result_folder:", best_result_folder, "min_loss:", min_loss, "best_learning_rate:", best_learning_rate, "best_momentum:", best_momentum)
+    return best_result_folder
 
 
 def get_test_folders(test_result_root_folder):
@@ -26,19 +61,18 @@ def get_test_folders(test_result_root_folder):
         last_folder = optimizer_test_folders[-1]
         test_folders.append(last_folder)
 
+    # Add K-FAC
+    last_folder = get_kfac_best_config_test_folder(test_result_root_folder, learning_rates=[None, 1e-3, 1e-2, 1e-1], momentums=[None, 0.1, 0.5, 0.9])
+    if last_folder is not None:
+        test_folders.append(last_folder)
+
     return test_folders
 
 
 def get_optimizer(test_folder):
-    # Return the optimizer (adam, momentum, my_adam, or my_momentum) from the folder name
-
-    # conf = read_config_file(test_folder)
-    # return conf["optimizer"]
-
-    for optimizer in ['adam', 'momentum', 'my_adam', 'my_momentum']:
-        if 'results_' + optimizer + '_' in test_folder:
-            return optimizer
-    raise 'Unexpected test folder name ' + test_folder
+    # Return the optimizer name (adam, momentum, my_adam, or my_momentum)
+    conf = read_config_file(test_folder)
+    return conf["optimizer"]
 
 
 def plot_train_loss_over_iterations_and_wall_time(test_result_root_folder, fig_file_name, y_top_lim, max_data_point=None, x_label='epoch'):
@@ -183,6 +217,8 @@ def plot_train_loss_over_iterations_and_wall_time_and_validation_loss(test_resul
 
     min_val = np.inf
     tenth_min_val = np.inf
+    max_y_wall_time = -np.inf
+    kfac_wall_times = None
 
     for test_folder in test_folders:
         optimizer = get_optimizer(test_folder)
@@ -202,6 +238,10 @@ def plot_train_loss_over_iterations_and_wall_time_and_validation_loss(test_resul
         ax = axes[1]
         ax.plot(df['wall_time'][:max_data_point][df['train_loss'] != 0], df['train_loss'][:max_data_point][df['train_loss'] != 0],
                 label=mapping[optimizer][2], color=mapping[optimizer][0], linestyle=mapping[optimizer][1], linewidth=0.7)
+        if optimizer != 'kfac' and df['wall_time'][:max_data_point][df['train_loss'] != 0].iloc[-1] > max_y_wall_time:
+            max_y_wall_time = df['wall_time'][:max_data_point][df['train_loss'] != 0].iloc[-1]
+        if optimizer == 'kfac':
+            kfac_wall_times = df['wall_time'][:max_data_point][df['train_loss'] != 0]
 
         ax = axes[2]
         ax.plot(df['epoch'][:max_data_point][df['val_loss'] != 0][::skip_val], df['val_loss'][:max_data_point][df['val_loss'] != 0][::skip_val],
@@ -211,13 +251,20 @@ def plot_train_loss_over_iterations_and_wall_time_and_validation_loss(test_resul
     axes[0].set_ylabel('train loss')
     y_bottom_lim = min_val - (tenth_min_val - min_val) if y_bottom_lim is None else y_bottom_lim
     axes[1].set_ylim(y_bottom_lim, y_top_lim)
+    # Cut the x-axis at the first wall time point of K-FAC that is larger than the last one of FOSI's
+    if kfac_wall_times is not None:
+        for wall_time in kfac_wall_times:
+            if wall_time > max_y_wall_time:
+                max_y_wall_time = wall_time
+                break
+    axes[1].set_xlim(right=max_y_wall_time)  # Cut the x-axis at the end of FOSI's graph, not K-FAC
     axes[1].set_xlabel('wall time (seconds)')
     axes[1].set_ylabel('train loss')
     axes[2].set_xlabel(x_label)
     axes[2].set_ylabel('validation loss')
 
     handles, labels = axes[0].get_legend_handles_labels()
-    fig.legend(handles, labels, framealpha=0, frameon=False, loc="upper center", bbox_to_anchor=(0.5, 1.03), ncol=4, columnspacing=1.0, handletextpad=0.29, handlelength=1.0)
+    fig.legend(handles, labels, framealpha=0, frameon=False, loc="upper center", bbox_to_anchor=(0.5, 1.03), ncol=len(test_folders), columnspacing=1.0, handletextpad=0.29, handlelength=1.0)
     plt.subplots_adjust(top=0.89, bottom=0.24, left=0.15, right=0.98, wspace=0.23)
 
     for ax in axes:
