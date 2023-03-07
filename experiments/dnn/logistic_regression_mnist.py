@@ -216,5 +216,5 @@ def train_mnist(optimizer_name):
 
 
 if __name__ == "__main__":
-    for optimizer_name in ['my_adam', 'my_momentum', 'adam', 'momentum']:
+    for optimizer_name in ['fosi_adam', 'fosi_momentum', 'adam', 'momentum']:
         train_mnist(optimizer_name)

@@ -29,6 +29,32 @@ print(xla_bridge.get_backend().platform)
 tf.config.experimental.set_visible_devices([], "GPU")
 
 
+class AudiosetDataset(data.Dataset):
+
+    def __init__(self, annotations_file_csv='./audioset_dataset/index.csv', img_dir='./audioset_dataset/train_jpg',
+                 transform=transforms.Compose([transforms.ToTensor()])):
+        super().__init__()
+        df = pd.read_csv(annotations_file_csv, converters={
+            "labels_as_indices": lambda x: np.array(x.strip("[]").replace("'", "").split(", ")).astype(int)})
+        self.df_data = df.values
+        self.data_dir = img_dir
+        self.transform = transform
+        self.num_classes = 527
+
+    def __len__(self):
+        return len(self.df_data)
+
+    def __getitem__(self, index):
+        img_name, label = self.df_data[index]
+        img_path = os.path.join(self.data_dir, img_name)
+        image = plt.imread(img_path)
+        if self.transform is not None:
+            image = self.transform(np.array(image))
+        target = torch.zeros(self.num_classes)
+        target[label] = 1.
+        return image, target
+
+
 def train_mobilenet(optimizer_name):
 
     def sigmoid_cross_entropy(logits, labels):
@@ -40,21 +66,7 @@ def train_mobilenet(optimizer_name):
         return jnp.asarray(loss)
 
     @jit
-    def loss_fn(params, batch_data):
-        """ Implements cross-entropy loss function.
-
-        Args:
-            params: Parameters of the network
-            batch_data: A batch of data (images and labels)
-        Returns:
-            Loss calculated for the current batch
-        """
-        inputs, targets = batch_data
-        preds, _ = model.apply(params, state, None, inputs, is_training=True)
-        return sigmoid_cross_entropy(logits=preds, labels=targets).mean()
-
-    @jit
-    def loss_fn_with_state(params, batch_data, state):
+    def loss_fn(params, batch_data, state):
         """ Implements cross-entropy loss function.
 
         Args:
@@ -93,7 +105,7 @@ def train_mobilenet(optimizer_name):
         Returns:
             Batch loss, batch accuracy
         """
-        batch_loss, _ = loss_fn_with_state(params, batch_data, state)
+        batch_loss, _ = loss_fn(params, batch_data, state)
         batch_accuracy = calculate_accuracy(params, batch_data, state)
         return batch_loss, batch_accuracy
 
@@ -108,7 +120,7 @@ def train_mobilenet(optimizer_name):
         Returns:
             Batch loss, batch accuracy, updated optimizer state
         """
-        (batch_loss, state), batch_gradients = value_and_grad(loss_fn_with_state, has_aux=True)(params, batch_data, state)
+        (batch_loss, state), batch_gradients = value_and_grad(loss_fn, has_aux=True)(params, batch_data, state)
         batch_accuracy = calculate_accuracy(params, batch_data, state)
 
         deltas, opt_state = optimizer.update(batch_gradients, opt_state, params)
@@ -118,37 +130,12 @@ def train_mobilenet(optimizer_name):
 
     np.random.seed(1234)
 
-    class MyDataset(data.Dataset):
-
-        def __init__(self, annotations_file_csv='./audioset_dataset/index.csv', img_dir='./audioset_dataset/train_jpg',
-                     transform=transforms.Compose([transforms.ToTensor()])):
-            super().__init__()
-            df = pd.read_csv(annotations_file_csv, converters={
-                "labels_as_indices": lambda x: np.array(x.strip("[]").replace("'", "").split(", ")).astype(int)})
-            self.df_data = df.values
-            self.data_dir = img_dir
-            self.transform = transform
-            self.num_classes = 527
-
-        def __len__(self):
-            return len(self.df_data)
-
-        def __getitem__(self, index):
-            img_name, label = self.df_data[index]
-            img_path = os.path.join(self.data_dir, img_name)
-            image = plt.imread(img_path)
-            if self.transform is not None:
-                image = self.transform(np.array(image))
-            target = torch.zeros(self.num_classes)
-            target[label] = 1.
-            return image, target
-
     batch_size = 256
 
-    trainset = MyDataset(annotations_file_csv='./audioset_dataset/index_train.csv', img_dir='./audioset_dataset/train_jpg')
+    trainset = AudiosetDataset(annotations_file_csv='./audioset_dataset/index_train.csv', img_dir='./audioset_dataset/train_jpg')
     train_ds = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True, num_workers=4, drop_last=True)
 
-    validset = MyDataset(annotations_file_csv='./audioset_dataset/index_valid.csv', img_dir='./audioset_dataset/valid_jpg')
+    validset = AudiosetDataset(annotations_file_csv='./audioset_dataset/index_valid.csv', img_dir='./audioset_dataset/valid_jpg')
     val_ds = torch.utils.data.DataLoader(validset, batch_size=batch_size, shuffle=False, num_workers=4, drop_last=True)
 
     num_train_batches = len(train_ds)
@@ -175,7 +162,8 @@ def train_mobilenet(optimizer_name):
     x = jnp.expand_dims(x, axis=0)
     net_params, state = model.init(random.PRNGKey(111), x, is_training=True)
 
-    optimizer = get_optimizer(conf, loss_fn, batch)
+    loss_f = lambda params, batch: loss_fn(params, batch, state)[0]
+    optimizer = get_optimizer(conf, loss_f, batch)
     opt_state = optimizer.init(net_params)
 
     ###############################    Training    ###############################
@@ -239,5 +227,5 @@ def train_mobilenet(optimizer_name):
 
 
 if __name__ == "__main__":
-    for optimizer_name in ['my_adam', 'my_momentum', 'adam', 'momentum']:
+    for optimizer_name in ['fosi_adam', 'fosi_momentum', 'adam', 'momentum']:
         train_mobilenet(optimizer_name)

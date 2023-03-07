@@ -29,32 +29,32 @@ def create_loss_summary_table(test_result_root_folders, dataset_type='val'):
             loss = df[dataset_type + '_loss'][:max_data_point].values[-1]
             if 'results_momentum' in test_folder:
                 loss_momentum = loss
-            if 'results_my_momentum' in test_folder:
-                loss_my_momentum = loss
+            if 'results_fosi_momentum' in test_folder:
+                loss_fosi_momentum = loss
             if 'results_adam' in test_folder:
                 loss_adam = loss
-            if 'results_my_adam' in test_folder:
-                loss_my_adam = loss
+            if 'results_fosi_adam' in test_folder:
+                loss_fosi_adam = loss
 
         loss_momentum_str = precision % loss_momentum
-        loss_my_momentum_str = precision % loss_my_momentum
+        loss_fosi_momentum_str = precision % loss_fosi_momentum
         loss_adam_str = precision % loss_adam
-        loss_my_adam_str = precision % loss_my_adam
+        loss_fosi_adam_str = precision % loss_fosi_adam
 
-        if loss_momentum < loss_my_momentum:
+        if loss_momentum < loss_fosi_momentum:
             loss_momentum_str = r'\textbf{' + loss_momentum_str + '}'
         else:
-            loss_my_momentum_str = r'\textbf{' + loss_my_momentum_str + '}'
+            loss_fosi_momentum_str = r'\textbf{' + loss_fosi_momentum_str + '}'
 
-        if loss_adam < loss_my_adam:
+        if loss_adam < loss_fosi_adam:
             loss_adam_str = r'\textbf{' + loss_adam_str + '}'
         else:
-            loss_my_adam_str = r'\textbf{' + loss_my_adam_str + '}'
+            loss_fosi_adam_str = r'\textbf{' + loss_fosi_adam_str + '}'
 
         with open(loss_summary_file_name, 'a') as f:
             f.write(task + " & " +
-                    loss_momentum_str + " & " + loss_my_momentum_str + " & " +
-                    loss_adam_str + " & " + loss_my_adam_str + r' \\' + "\n")
+                    loss_momentum_str + " & " + loss_fosi_momentum_str + " & " +
+                    loss_adam_str + " & " + loss_fosi_adam_str + r' \\' + "\n")
             if task != "LR":
                 f.write(r'\cmidrule(r){1-5}' + "\n")
 
@@ -76,7 +76,7 @@ def create_wall_time_to_loss_summary_table(dataset_type='val'):
 
         for optimizer_technique in ['adam', 'momentum']:
             base_test_folder = [f for f in test_folders if 'results_' + optimizer_technique in f][0]
-            fosi_test_folder = [f for f in test_folders if 'results_my_' + optimizer_technique in f][0]
+            fosi_test_folder = [f for f in test_folders if 'results_fosi_' + optimizer_technique in f][0]
             df_base = pd.read_csv(base_test_folder + '/train_stats.csv')
             df_fosi = pd.read_csv(fosi_test_folder + '/train_stats.csv')
 
@@ -147,7 +147,7 @@ def create_wall_time_to_acc_summary_table(dataset_type='val'):
 
         for optimizer_technique in ['adam', 'momentum']:
             base_test_folder = [f for f in test_folders if 'results_' + optimizer_technique in f][0]
-            fosi_test_folder = [f for f in test_folders if 'results_my_' + optimizer_technique in f][0]
+            fosi_test_folder = [f for f in test_folders if 'results_fosi_' + optimizer_technique in f][0]
             df_base = pd.read_csv(base_test_folder + '/train_stats.csv')
             df_fosi = pd.read_csv(fosi_test_folder + '/train_stats.csv')
 

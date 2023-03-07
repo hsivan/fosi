@@ -38,7 +38,7 @@ def get_config(optimizer='adam', learning_rate=1e-3, num_epochs=100, batch_size=
         else:
             learning_rate_clip = 3.0  # Use 3.0 as the default value
 
-    conf["optimizer"] = optimizer  # Base optimizer. Could be 'sgd' / 'momentum' / 'adam' / 'my_sgd' / 'my_momentum' / 'my_adam'
+    conf["optimizer"] = optimizer  # Base optimizer. Could be 'sgd' / 'momentum' / 'adam' / 'fosi_sgd' / 'fosi_momentum' / 'fosi_adam'
     conf["learning_rate"] = learning_rate  # Learning rate of the base optimizer
     conf["num_epochs"] = num_epochs
     conf["batch_size"] = batch_size
@@ -69,19 +69,19 @@ def get_optimizer(conf, loss_fn, batch):
         optimizer = optax.sgd(conf["learning_rate"], momentum=conf["momentum"], nesterov=False)
     elif conf["optimizer"] == 'adam':
         optimizer = optax.adam(conf["learning_rate"])
-    elif conf["optimizer"] == 'my_momentum':
+    elif conf["optimizer"] == 'fosi_momentum':
         optimizer = fosi_momentum(optax.sgd(conf["learning_rate"], momentum=conf["momentum"], nesterov=False), loss_fn,
                                   batch, decay=conf["momentum"],
                                   num_iters_to_approx_eigs=conf["num_iterations_between_ese"],
                                   approx_k=conf["approx_k"], approx_l=conf["approx_l"],
                                   warmup_w=conf["num_warmup_iterations"], alpha=conf["alpha"],
                                   learning_rate_clip=conf["learning_rate_clip"])
-    elif conf["optimizer"] == 'my_adam':
+    elif conf["optimizer"] == 'fosi_adam':
         optimizer = fosi_adam(optax.adam(conf["learning_rate"]), loss_fn, batch, decay=conf["momentum"],
                               num_iters_to_approx_eigs=conf["num_iterations_between_ese"],
                               approx_k=conf["approx_k"], approx_l=conf["approx_l"],
                               warmup_w=conf["num_warmup_iterations"], alpha=conf["alpha"])
     else:
-        raise "Illegal optimizer " + conf["optimizer"]
+        raise ValueError("Illegal optimizer " + conf["optimizer"])
 
     return optimizer

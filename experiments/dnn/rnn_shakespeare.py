@@ -213,8 +213,8 @@ def main(optimizer_name):
             prompt = TinyShakespeareDataset.decode(context)
             continuation = TinyShakespeareDataset.decode(samples)
 
-            print('Prompt: %s', prompt)
-            print('Continuation: %s', continuation)
+            print('Prompt:', prompt)
+            print('Continuation:', continuation)
 
         # Periodically evaluate training and test loss.
         if step % EVALUATION_INTERVAL == 0:
@@ -245,5 +245,5 @@ def main(optimizer_name):
 
 
 if __name__ == '__main__':
-    for optimizer_name in ['my_adam', 'my_momentum', 'adam', 'momentum']:
+    for optimizer_name in ['fosi_adam', 'fosi_momentum', 'adam', 'momentum']:
         main(optimizer_name)

@@ -7,26 +7,18 @@ os.environ['JAX_DEFAULT_DTYPE_BITS'] = '32'
 import csv
 import numpy as np
 from timeit import default_timer as timer
-from matplotlib import pyplot as plt
-import pandas as pd
 
-import tensorflow as tf
 import torch
 import torch.utils.data as data
-import torchvision.transforms as transforms
 import jax
 import jax.numpy as jnp
 from jax import random, jit
-from jax.lib import xla_bridge
 import haiku as hk
 from haiku.nets import MobileNetV1
 import kfac_jax
 
 from experiments.dnn.dnn_test_utils import start_test, get_config, write_config_to_file
-
-print(jax.local_devices())
-print(xla_bridge.get_backend().platform)
-tf.config.experimental.set_visible_devices([], "GPU")
+from experiments.dnn.mobilenet_audioset import AudiosetDataset
 
 
 def train_mobilenet(optimizer_name, learning_rate, momentum):
@@ -40,7 +32,7 @@ def train_mobilenet(optimizer_name, learning_rate, momentum):
         loss = -labels * log_p - (1. - labels) * log_not_p
         return jnp.asarray(loss)
 
-    def loss_fn_with_state(params, state, batch_data):
+    def loss_fn(params, state, batch_data):
         """ Implements cross-entropy loss function.
 
         Args:
@@ -59,7 +51,7 @@ def train_mobilenet(optimizer_name, learning_rate, momentum):
         # To address this, we need to use 'value_func_has_aux=True' when calling kfac_jax.Optimizer().
         # Otherwise, the method convert_value_and_grad_to_value_func() in kfac_jax/_src/optimizer.py
         # won't convert value_and_grad_func to value_func correctly.
-        # However, the loss_fn_with_state function doesn't return auxiliary data, only state.
+        # However, loss_fn doesn't return auxiliary data, only state.
         # To handle this, we need to convert the returned values from '(loss, state)' to '(loss, (state, None))',
         # where None is for the auxiliary data.
         # Note: A more appropriate solution would be to modify kfac_jax/_src/optimizer.py and invoke
@@ -93,43 +85,18 @@ def train_mobilenet(optimizer_name, learning_rate, momentum):
         Returns:
             Batch loss, batch accuracy
         """
-        batch_loss, _ = loss_fn_with_state(params, state, batch_data)
+        batch_loss, _ = loss_fn(params, state, batch_data)
         batch_accuracy = calculate_accuracy(params, batch_data, state)
         return batch_loss, batch_accuracy
 
     np.random.seed(1234)
 
-    class MyDataset(data.Dataset):
-
-        def __init__(self, annotations_file_csv='./audioset_dataset/index.csv', img_dir='./audioset_dataset/train_jpg',
-                     transform=transforms.Compose([transforms.ToTensor()])):
-            super().__init__()
-            df = pd.read_csv(annotations_file_csv, converters={
-                "labels_as_indices": lambda x: np.array(x.strip("[]").replace("'", "").split(", ")).astype(int)})
-            self.df_data = df.values
-            self.data_dir = img_dir
-            self.transform = transform
-            self.num_classes = 527
-
-        def __len__(self):
-            return len(self.df_data)
-
-        def __getitem__(self, index):
-            img_name, label = self.df_data[index]
-            img_path = os.path.join(self.data_dir, img_name)
-            image = plt.imread(img_path)
-            if self.transform is not None:
-                image = self.transform(np.array(image))
-            target = torch.zeros(self.num_classes)
-            target[label] = 1.
-            return image, target
-
     batch_size = 256
 
-    trainset = MyDataset(annotations_file_csv='./audioset_dataset/index_train.csv', img_dir='./audioset_dataset/train_jpg')
+    trainset = AudiosetDataset(annotations_file_csv='./audioset_dataset/index_train.csv', img_dir='./audioset_dataset/train_jpg')
     train_ds = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True, num_workers=4, drop_last=True)
 
-    validset = MyDataset(annotations_file_csv='./audioset_dataset/index_valid.csv', img_dir='./audioset_dataset/valid_jpg')
+    validset = AudiosetDataset(annotations_file_csv='./audioset_dataset/index_valid.csv', img_dir='./audioset_dataset/valid_jpg')
     val_ds = torch.utils.data.DataLoader(validset, batch_size=batch_size, shuffle=False, num_workers=4, drop_last=True)
 
     num_train_batches = len(train_ds)
@@ -157,7 +124,7 @@ def train_mobilenet(optimizer_name, learning_rate, momentum):
 
     # Use adaptive_learning_rate and adaptive_momentum
     optimizer = kfac_jax.Optimizer(
-        value_and_grad_func=jax.value_and_grad(loss_fn_with_state, has_aux=True),
+        value_and_grad_func=jax.value_and_grad(loss_fn, has_aux=True),
         l2_reg=0.0,
         value_func_has_aux=True,
         value_func_has_state=True,
@@ -248,6 +215,7 @@ if __name__ == "__main__":
     learning_rates = [None, 1e-3, 1e-2, 1e-1]
     momentums = [None, 0.1, 0.5, 0.9]
 
+    # min_loss: 0.020915525 best_learning_rate: None best_momentum: 0.9
     for learning_rate in learning_rates:
         for momentum in momentums:
             train_mobilenet('kfac', learning_rate, momentum)

@@ -90,6 +90,11 @@ python transfer_learning_cifar10.py
 python autoencoder_cifar10.py
 python rnn_shakespeare.py
 python mobilenet_audioset.py
+
+python logistic_regression_mnist_kfac.py
+python transfer_learning_cifar10_kfac.py
+python autoencoder_cifar10_kfac.py
+python mobilenet_audioset_kfac.py
 ```
 
 After running all the experiments, run the following to generate the figures:
@@ -133,7 +138,7 @@ sudo docker run --gpus all -v ${local_result_dir}:${docker_result_dir} --rm fosi
 The result folders and files can be found in the same location as running the experiments without Docker, under `<fosi_root>/experiments/quadratic`.
 
 ### Deep neural networks
-The docker supports running the experiments `logistic_regression_mnist`, `transfer_learning_cifar10`, `autoencoder_cifar10`, `rnn_shakespeare`, and `mobilenet_audioset`.
+The docker supports running the experiments `logistic_regression_mnist`, `transfer_learning_cifar10`, `autoencoder_cifar10`, `rnn_shakespeare`, `mobilenet_audioset`, `logistic_regression_mnist_kfac`, `transfer_learning_cifar10_kfac`, `autoencoder_cifar10_kfac`, and `mobilenet_audioset_kfac`.
 For example, to run the `logistic_regression_mnist` execute the following commands
 ```bash
 cd <fosi_root>

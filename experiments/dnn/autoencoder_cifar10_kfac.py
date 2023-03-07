@@ -4,8 +4,6 @@ import os
 # Note: To maintain the default precision as 32-bit and not switch to 64-bit, set the following flag prior to any
 # imports of JAX. This is necessary as the jax_enable_x64 flag is later set to True inside the Lanczos algorithm.
 # See: https://github.com/google/jax/issues/8178
-from experiments.dnn.autoencoder_cifar10 import Autoencoder, val_loader, train_loader, test_loader
-
 os.environ['JAX_DEFAULT_DTYPE_BITS'] = '32'
 
 import csv
@@ -14,10 +12,10 @@ from tqdm.auto import tqdm
 from timeit import default_timer as timer
 
 import jax
-from jax import jit
 import kfac_jax
 
 from experiments.dnn.dnn_test_utils import start_test, get_config, write_config_to_file
+from experiments.dnn.autoencoder_cifar10 import Autoencoder, val_loader, train_loader, test_loader
 
 
 class TrainerModule:
@@ -39,20 +37,16 @@ class TrainerModule:
         self.init_model()
 
     def create_functions(self):
-        def mse_recon_loss(params, batch):
+        # Loss function: MSE reconstruction loss
+        def loss_fn(params, batch):
             imgs, _ = batch
             recon_imgs = self.model.apply({'params': params}, imgs)
             kfac_jax.register_squared_error_loss(recon_imgs, imgs)
             loss = ((recon_imgs - imgs) ** 2).mean(axis=0).sum()  # Mean over batch, sum over pixels
             return loss
 
-        self.loss_fn = mse_recon_loss
-
-        @jit
-        def eval_step(params, batch):
-            return mse_recon_loss(params, batch)
-
-        self.eval_step = eval_step
+        self.loss_fn = loss_fn  # jitted by the K-FAC library
+        self.jitted_loss_fn = jax.jit(loss_fn)
 
     def init_model(self):
         # Initialize model
@@ -129,7 +123,7 @@ class TrainerModule:
         losses = []
         batch_sizes = []
         for batch in data_loader:
-            loss = self.eval_step(self.params, batch)
+            loss = self.jitted_loss_fn(self.params, batch)
             losses.append(loss)
             batch_sizes.append(batch[0].shape[0])
         losses_np = np.stack(jax.device_get(losses))

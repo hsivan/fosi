@@ -180,13 +180,6 @@ print(out.shape)
 del out, autoencoder, params
 
 
-def mse_recon_loss(model, params, batch):
-    imgs, _ = batch
-    recon_imgs = model.apply({'params': params}, imgs)
-    loss = ((recon_imgs - imgs) ** 2).mean(axis=0).sum()  # Mean over batch, sum over pixels
-    return loss
-
-
 class TrainerModule:
 
     def __init__(self, c_hid, latent_dim, conf, seed=42):
@@ -206,20 +199,21 @@ class TrainerModule:
         self.init_model()
 
     def create_functions(self):
+        # Loss function: MSE reconstruction loss
+        def loss_fn(params, batch):
+            imgs, _ = batch
+            recon_imgs = self.model.apply({'params': params}, imgs)
+            loss = ((recon_imgs - imgs) ** 2).mean(axis=0).sum()  # Mean over batch, sum over pixels
+            return loss
+
         # Training function
         def train_step(state, batch):
-            loss_fn = lambda params: mse_recon_loss(self.model, params, batch)
-            loss, grads = jax.value_and_grad(loss_fn)(state.params)  # Get loss and gradients for loss
+            loss, grads = jax.value_and_grad(loss_fn)(state.params, batch)  # Get loss and gradients for loss
             state = state.apply_gradients(grads=grads)  # Optimizer update step
             return state, loss
 
+        self.loss_fn = jax.jit(loss_fn)
         self.train_step = jax.jit(train_step)
-
-        # Eval function
-        def eval_step(state, batch):
-            return mse_recon_loss(self.model, state.params, batch)
-
-        self.eval_step = jax.jit(eval_step)
 
     def init_model(self):
         # Initialize model
@@ -227,14 +221,12 @@ class TrainerModule:
         rng, init_rng = jax.random.split(rng)
         params = self.model.init(init_rng, self.exmp_imgs)['params']
 
-        loss_fn = lambda params, batch: mse_recon_loss(self.model, params, batch)
-
         # Initialize learning rate schedule and optimizer
         print("len(train_loader)", len(train_loader))
 
         optimizer = optax.chain(
             optax.clip(1.0),  # Clip gradients at 1
-            get_optimizer(conf, loss_fn, next(iter(train_loader)))
+            get_optimizer(conf, self.loss_fn, next(iter(train_loader)))
         )
 
         # Initialize training state
@@ -276,7 +268,7 @@ class TrainerModule:
         losses = []
         batch_sizes = []
         for batch in data_loader:
-            loss = self.eval_step(self.state, batch)
+            loss = self.loss_fn(self.state.params, batch)
             losses.append(loss)
             batch_sizes.append(batch[0].shape[0])
         losses_np = np.stack(jax.device_get(losses))
@@ -296,7 +288,7 @@ def train_cifar(latent_dim, conf=None):
 
 
 if __name__ == "__main__":
-    for optimizer_name in ['my_momentum', 'momentum', 'my_adam', 'adam']:
+    for optimizer_name in ['fosi_momentum', 'momentum', 'fosi_adam', 'adam']:
         # Heavy-Ball (momentum) diverges with learning rate 1e-2. Using 1e-3 instead.
         conf = get_config(optimizer=optimizer_name, approx_k=10, batch_size=256, learning_rate=1e-3,
                           num_iterations_between_ese=800, approx_l=0, alpha=0.01, learning_rate_clip=1.0)

@@ -8,9 +8,9 @@ from matplotlib import rcParams, pyplot as plt, rcParamsDefault
 from experiments.visualization.visualization_utils import get_figsize, set_rc_params
 
 mapping = {'adam': ('tab:blue', '--', 'Adam'),
-           'my_adam': ('tab:blue', '-', 'FOSI-Adam'),
+           'fosi_adam': ('tab:blue', '-', 'FOSI-Adam'),
            'momentum': ('tab:orange', '--', 'HB'),
-           'my_momentum': ('tab:orange', '-', 'FOSI-HB'),
+           'fosi_momentum': ('tab:orange', '-', 'FOSI-HB'),
            'kfac': ('tab:red', '-', 'K-FAC')
            }
 
@@ -50,12 +50,12 @@ def get_kfac_best_config_test_folder(test_result_root_folder, learning_rates, mo
 
 
 def get_test_folders(test_result_root_folder):
-    # Return 4 test folders - last run for each optimizer, Adam (adam), HB (momentum), FOSI-Adam (my_adam),
-    # and FOSI-HB (my_momentum)
+    # Return 4 test folders - last run for each optimizer, Adam (adam), HB (momentum), FOSI-Adam (fosi_adam),
+    # and FOSI-HB (fosi_momentum)
 
     test_folders = []
 
-    for optimizer in ['adam', 'momentum', 'my_adam', 'my_momentum']:
+    for optimizer in ['adam', 'momentum', 'fosi_adam', 'fosi_momentum']:
         optimizer_test_folders = [test_result_root_folder + f for f in os.listdir(test_result_root_folder) if f.startswith('results_' + optimizer + '_')]
         optimizer_test_folders.sort()
         last_folder = optimizer_test_folders[-1]
@@ -70,7 +70,7 @@ def get_test_folders(test_result_root_folder):
 
 
 def get_optimizer(test_folder):
-    # Return the optimizer name (adam, momentum, my_adam, or my_momentum)
+    # Return the optimizer name (adam, momentum, fosi_adam, or fosi_momentum)
     conf = read_config_file(test_folder)
     return conf["optimizer"]
 
@@ -109,7 +109,7 @@ def plot_train_loss_over_iterations_and_wall_time(test_result_root_folder, fig_f
         axes[1].set_xlabel('wall time (seconds)')
 
         handles, labels = axes[0].get_legend_handles_labels()
-        fig.legend(handles, labels, framealpha=0, frameon=False, loc="upper center", bbox_to_anchor=(0.5, 1.02), ncol=4, columnspacing=1.0, handletextpad=0.29, handlelength=1.0)
+        fig.legend(handles, labels, framealpha=0, frameon=False, loc="upper center", bbox_to_anchor=(0.5, 1.02), ncol=len(test_folders), columnspacing=1.0, handletextpad=0.29, handlelength=1.0)
         plt.subplots_adjust(top=0.9, bottom=0.20, left=0.12, right=0.99, wspace=0.1)
 
         for ax in axes:
@@ -190,7 +190,7 @@ def plot_loss_and_accuracy_for_mobilenet(test_result_root_folder, fig_file_name,
     axes[1][1].set_ylabel('validation accuracy', labelpad=6)
 
     handles, labels = axes[0][0].get_legend_handles_labels()
-    fig.legend(handles, labels, framealpha=0, frameon=False, loc="upper center", bbox_to_anchor=(0.5, 1.03), ncol=4,
+    fig.legend(handles, labels, framealpha=0, frameon=False, loc="upper center", bbox_to_anchor=(0.5, 1.03), ncol=len(test_folders),
                columnspacing=1.0, handletextpad=0.29, handlelength=1.0)
     plt.subplots_adjust(top=0.9, bottom=0.19, left=0.14, right=0.99, wspace=0.5, hspace=0.45)
 
@@ -318,7 +318,7 @@ def plot_train_loss_over_iterations_and_wall_time_and_validation_accuracy(test_r
     axes[0].set_yticks([0.01, 0.02, 0.03])
 
     handles, labels = axes[0].get_legend_handles_labels()
-    fig.legend(handles, labels, framealpha=0, frameon=False, loc="upper center", bbox_to_anchor=(0.579, 1.05), ncol=4, columnspacing=1.0, handletextpad=0.29, handlelength=1.0)
+    fig.legend(handles, labels, framealpha=0, frameon=False, loc="upper center", bbox_to_anchor=(0.5, 1.05), ncol=len(test_folders), columnspacing=0.7, handletextpad=0.29, handlelength=1.0)
     plt.subplots_adjust(top=0.86, bottom=0.28, left=0.21, right=0.99, wspace=0.2)
 
     for ax in axes:
