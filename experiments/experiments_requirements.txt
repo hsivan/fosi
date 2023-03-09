@@ -12,13 +12,15 @@
 #-f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
 jax[cuda11_cudnn86]==0.4.2
 optax
+pip install functorch
+pip install torchopt
 
 # Packages for the experiments
 tensorflow
 tensorflow-datasets
 dm-haiku
-torch==1.12.1
-torchvision==0.13.1
+torch
+torchvision
 matplotlib
 flax
 pandas

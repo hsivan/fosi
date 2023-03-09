@@ -1,8 +1,8 @@
 import jax
 import jax.numpy as jnp
-
-from fosi.lanczos_algorithm import lanczos_alg
 import jax.experimental.host_callback as hcb
+
+from fosi.jax_optim.lanczos_algorithm import lanczos_alg
 
 
 def _ese(lanczos_alg_gitted, batch, params):

@@ -23,7 +23,7 @@ setuptools.setup(
     long_description_content_type="text/markdown",
     install_requires=INSTALL_REQUIRES,
     url='https://github.com/hsivan/fosi',
-    packages=setuptools.find_packages(include=['fosi']),
+    packages=setuptools.find_packages(include=['fosi', 'fosi.*']),
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: Apache Software License",

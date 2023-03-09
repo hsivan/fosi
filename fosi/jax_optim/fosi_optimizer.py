@@ -7,7 +7,7 @@ from optax import Params, GradientTransformation
 from optax import safe_int32_increment
 from optax import OptState
 
-from fosi.extreme_spectrum_estimation import get_ese_fn
+from fosi.jax_optim.extreme_spectrum_estimation import get_ese_fn
 
 
 def approx_learning_rates_and_eigenvectors(ese_fn, params):
