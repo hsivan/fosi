@@ -44,10 +44,10 @@ opt_state = optimizer.init(params)
 
 # A simple update loop.
 for i in range(5000):
-  loss, grads = jax.value_and_grad(loss_fn)(params, next(data_gen))
-  updates, opt_state = jax.jit(optimizer.update)(grads, opt_state, params)
-  params = optax.apply_updates(params, updates)
-  if i % 100 == 0:
-    print("loss:", loss)
+    loss, grads = jax.value_and_grad(loss_fn)(params, next(data_gen))
+    updates, opt_state = jax.jit(optimizer.update)(grads, opt_state, params)
+    params = optax.apply_updates(params, updates)
+    if i % 100 == 0:
+        print("loss:", loss)
 
 assert jnp.allclose(params, target_params), 'Optimization should retrieve the target params used to generate the data.'

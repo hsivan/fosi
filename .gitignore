@@ -46,6 +46,8 @@ test_results*
 *.pkl
 figures
 result_summary
+*.pem
+new_user_credentials.csv
 
 # Datasets
 cifar10_dataset

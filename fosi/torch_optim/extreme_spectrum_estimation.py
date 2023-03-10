@@ -7,7 +7,7 @@ def _ese(lanczos_alg_gitted, batch, params):
     k_largest_eigenvals, k_largest_eigenvecs, l_smallest_eigenvals, l_smallest_eigenvecs = lanczos_alg_gitted(params, batch)
     k_eigenvals = torch.cat((l_smallest_eigenvals, k_largest_eigenvals))
     k_eigenvecs = torch.cat((l_smallest_eigenvecs, k_largest_eigenvecs), 0)
-    print(f"lambda_max: {torch.max(k_eigenvals)} lrs: {1.0 / k_eigenvals} eigenvals: {k_eigenvals}")
+    print(f"lambda_max: {torch.max(k_eigenvals).item()} lrs: {1.0 / k_eigenvals.data} eigenvals: {k_eigenvals.data}")
     return (k_eigenvals, k_eigenvecs)
 
 

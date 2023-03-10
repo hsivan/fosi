@@ -1,8 +1,8 @@
 from typing import Any, Optional, NamedTuple, Callable
 
 import torch
-from torchopt.typing import Params, OptState  # Replace with 'Any' for Version < 0.6.0
-from torchopt.base import GradientTransformation  # Version < 0.6.0 use: from torchopt._src.base import GradientTransformation
+# from torchopt.typing import Params, OptState  # Replace velocity and base_opt_state current 'Any' with Params and OptState for Version >= 0.6.0
+from torchopt._src.base import GradientTransformation  # Replace with 'from torchopt.base import GradientTransformation' for version >= 0.6.0
 
 from fosi.torch_optim.lanczos_algorithm import ravel, unravel
 from fosi.torch_optim.extreme_spectrum_estimation import get_ese_fn
@@ -56,8 +56,8 @@ def get_g1_and_g2(g, k_eigenvecs, device):
 
 
 class ScaleByFosiState(NamedTuple):
-    base_opt_state: OptState
-    velocity: Params
+    base_opt_state: Any  # OptState
+    velocity: Any  # Params
     count: torch.tensor
     k_learning_rates: torch.tensor
     k_eigenvecs: torch.tensor

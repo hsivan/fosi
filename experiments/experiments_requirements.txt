@@ -12,8 +12,8 @@
 #-f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
 jax[cuda11_cudnn86]==0.4.2
 optax
-pip install functorch
-pip install torchopt
+functorch==0.2.1
+torchopt==0.5.0.post4
 
 # Packages for the experiments
 tensorflow
@@ -25,7 +25,7 @@ matplotlib
 flax
 pandas
 jax-resnet
-numpy==1.23.0
+numpy
 tqdm
 scipy
 soundfile
