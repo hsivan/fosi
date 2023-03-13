@@ -75,13 +75,18 @@ from fosi import fosi_adam
 import jax.numpy as jnp
 import jax
 import optax
+import haiku as hk
 
-def network(params, x):
-    return jnp.dot(x, params)
+key = jax.random.PRNGKey(42)
+n_dim = 100
+target_params = 0.5
+
+# Single linear layer w/o bias equals inner product between the input and the network parameters
+model = hk.without_apply_rng(hk.transform(lambda x: hk.Linear(1, with_bias=False, w_init=hk.initializers.Constant(0.0))(x)))
 
 def loss_fn(params, batch):
     x, y = batch
-    y_pred = network(params, x)
+    y_pred = model.apply(params, x).squeeze()
     loss = jnp.mean(optax.l2_loss(y_pred, y))
     return loss
 
@@ -93,9 +98,6 @@ def data_generator(key, target_params, n_dim):
         yield batch_xs, batch_ys
 
 # Generate random data
-n_dim = 100
-key = jax.random.PRNGKey(42)
-target_params = 0.5
 data_gen = data_generator(key, target_params, n_dim)
 
 # Construct the FOSI-Adam optimizer. The usage after construction is identical to that of Optax optimizers,
@@ -103,18 +105,23 @@ data_gen = data_generator(key, target_params, n_dim)
 optimizer = fosi_adam(optax.adam(1e-3), loss_fn, next(data_gen))
 
 # Initialize parameters of the model and optimizer
-params = jnp.zeros(n_dim)
+params = model.init(key, next(data_gen)[0])
 opt_state = optimizer.init(params)
+
+@jax.jit
+def step(params, batch, opt_state):
+    loss, grads = jax.value_and_grad(loss_fn)(params, batch)
+    updates, opt_state = optimizer.update(grads, opt_state, params)
+    params = optax.apply_updates(params, updates)
+    return params, opt_state, loss
 
 # A simple update loop.
 for i in range(5000):
-    loss, grads = jax.value_and_grad(loss_fn)(params, next(data_gen))
-    updates, opt_state = jax.jit(optimizer.update)(grads, opt_state, params)
-    params = optax.apply_updates(params, updates)
+    params, opt_state, loss = step(params, next(data_gen), opt_state)
     if i % 100 == 0:
         print("loss:", loss)
 
-assert jnp.allclose(params, target_params), 'Optimization should retrieve the target params used to generate the data.'
+assert jnp.allclose(params['linear']['w'], target_params), 'Optimization should retrieve the target params used to generate the data.'
 ```
 
 ### PyTorch
@@ -129,24 +136,17 @@ import functorch
 
 torch.set_default_dtype(torch.float32)
 device = torch.device("cuda")  # "cpu" or "cuda"
-
-class Net(torch.nn.Module):
-    def __init__(self, in_dim):
-        super(Net, self).__init__()
-        self.hid = torch.nn.Linear(in_dim, 1, bias=False)
-
-    def forward(self, x):
-        z = self.hid(x)
-        return z
-
 n_dim = 100
-net = Net(n_dim).to(device)
-net.hid.weight.data.fill_(0.0)
-model, params = functorch.make_functional(net)
+target_params = 0.5
+
+# Single linear layer w/o bias equals inner product between the input and the network parameters
+model = torch.nn.Linear(n_dim, 1, bias=False).to(device)
+model.weight.data.fill_(0.0)
+apply_fn, params = functorch.make_functional(model)
 
 def loss_fn(params, batch):
     x, y = batch
-    y_pred = model(params, x)
+    y_pred = apply_fn(params, x)
     loss = torch.nn.MSELoss()(y_pred, y)
     return loss
 
@@ -157,22 +157,25 @@ def data_generator(target_params, n_dim):
         yield batch_xs, batch_ys
 
 # Generate random data
-target_params = 0.5
 data_gen = data_generator(target_params, n_dim)
 
-# Construct the FOSI-Adam optimizer. The usage after construction is identical to that of Optax optimizers,
+# Construct the FOSI-Adam optimizer. The usage after construction is identical to that of TorchOpt optimizers,
 # with the optimizer.init() and optimizer.update() methods.
 optimizer = fosi_adam_torch(torchopt.adam(lr=1e-3), loss_fn, next(data_gen), device=device)
 
-# Initialize parameters of the model and optimizer
+# Initialize the optimizer
 opt_state = optimizer.init(params)
 
-# A simple update loop.
-for i in range(5000):
-    loss = loss_fn(params, next(data_gen))
+def step(params, batch, opt_state):
+    loss = loss_fn(params, batch)
     grads = torch.autograd.grad(loss, params)
     updates, opt_state = optimizer.update(grads, opt_state, params)
     params = torchopt.apply_updates(params, updates, inplace=True)
+    return params, opt_state, loss
+
+# A simple update loop.
+for i in range(5000):
+    params, opt_state, loss = step(params, next(data_gen), opt_state)
     if i % 100 == 0:
         print("loss:", loss.item())
 

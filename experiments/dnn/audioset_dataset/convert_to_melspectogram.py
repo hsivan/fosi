@@ -1,16 +1,12 @@
 # Based on https://github.com/tensorflow/models/blob/master/research/audioset/vggish/mel_features.py
 
 import os
-os.environ["KMP_DUPLICATE_LIB_OK"]="TRUE"
-
 import csv
-import os
 import numpy as np
 import pandas as pd
 import soundfile as sf
 import resampy
 import matplotlib.pyplot as plt
-import torch
 import tqdm
 
 
@@ -307,15 +303,6 @@ def read_wav_labels_csv(wav_labels_csv_file):
     return df, num_classes
 
 
-def read_csv_to_multi_hot_encoding(csv_file, num_classes):
-    df = pd.read_csv(csv_file, converters={
-        "labels_as_indices": lambda x: np.array(x.strip("[]").replace("'", "").split(", ")).astype(int)})
-    data = df.values
-    img_name, label = data[0]
-    target = torch.zeros(num_classes)
-    target[label] = 1.
-
-
 if __name__ == "__main__":
 
     for dataset_type in ['train', 'valid']:
@@ -352,5 +339,3 @@ if __name__ == "__main__":
                             [sub_file, df['labels_as_indices'][df['YTID'] == file.replace('.wav', '')].values[0]])
             except Exception:
                 print("Failed for file:", file)
-
-        read_csv_to_multi_hot_encoding(csv_index_file, num_classes)

@@ -1,9 +1,7 @@
 import os
-os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
-
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"  # Workaround to resolve collision between torch and matplotlib
 import torch
 import matplotlib.pyplot as plt
-
 from lanczos_algorithm import lanczos_alg
 
 torch.set_default_dtype(torch.float32)

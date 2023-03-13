@@ -7,18 +7,20 @@ from fosi import fosi_adam
 import jax.numpy as jnp
 import jax
 import optax
+import haiku as hk
 
+key = jax.random.PRNGKey(42)
+n_dim = 100
+target_params = 0.5
 
-def network(params, x):
-    return jnp.dot(x, params)
-
+# Single linear layer w/o bias equals inner product between the input and the network parameters
+model = hk.without_apply_rng(hk.transform(lambda x: hk.Linear(1, with_bias=False, w_init=hk.initializers.Constant(0.0))(x)))
 
 def loss_fn(params, batch):
     x, y = batch
-    y_pred = network(params, x)
+    y_pred = model.apply(params, x).squeeze()
     loss = jnp.mean(optax.l2_loss(y_pred, y))
     return loss
-
 
 def data_generator(key, target_params, n_dim):
     while True:
@@ -27,11 +29,7 @@ def data_generator(key, target_params, n_dim):
         batch_ys = jnp.sum(batch_xs * target_params, axis=-1)
         yield batch_xs, batch_ys
 
-
 # Generate random data
-n_dim = 100
-key = jax.random.PRNGKey(42)
-target_params = 0.5
 data_gen = data_generator(key, target_params, n_dim)
 
 # Construct the FOSI-Adam optimizer. The usage after construction is identical to that of Optax optimizers,
@@ -39,15 +37,20 @@ data_gen = data_generator(key, target_params, n_dim)
 optimizer = fosi_adam(optax.adam(1e-3), loss_fn, next(data_gen))
 
 # Initialize parameters of the model and optimizer
-params = jnp.zeros(n_dim)
+params = model.init(key, next(data_gen)[0])
 opt_state = optimizer.init(params)
+
+@jax.jit
+def step(params, batch, opt_state):
+    loss, grads = jax.value_and_grad(loss_fn)(params, batch)
+    updates, opt_state = optimizer.update(grads, opt_state, params)
+    params = optax.apply_updates(params, updates)
+    return params, opt_state, loss
 
 # A simple update loop.
 for i in range(5000):
-    loss, grads = jax.value_and_grad(loss_fn)(params, next(data_gen))
-    updates, opt_state = jax.jit(optimizer.update)(grads, opt_state, params)
-    params = optax.apply_updates(params, updates)
+    params, opt_state, loss = step(params, next(data_gen), opt_state)
     if i % 100 == 0:
         print("loss:", loss)
 
-assert jnp.allclose(params, target_params), 'Optimization should retrieve the target params used to generate the data.'
+assert jnp.allclose(params['linear']['w'], target_params), 'Optimization should retrieve the target params used to generate the data.'

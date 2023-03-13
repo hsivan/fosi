@@ -6,7 +6,7 @@ os.environ['JAX_DEFAULT_DTYPE_BITS'] = '32'
 
 import jax.numpy as np
 import jax.random as random
-from jax.example_libraries.stax import Dense, LogSoftmax, Relu, Tanh
+from jax.example_libraries.stax import Dense, LogSoftmax, Tanh
 from jax.example_libraries import stax
 from jax.flatten_util import ravel_pytree
 from jax import jacfwd, jacrev
