@@ -31,3 +31,4 @@ scipy
 soundfile
 resampy
 kfac-jax
+jaxopt

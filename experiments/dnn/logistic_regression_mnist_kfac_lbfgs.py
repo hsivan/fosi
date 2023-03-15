@@ -16,6 +16,7 @@ import jax.numpy as jnp
 from jax import random
 from jax import jit
 import kfac_jax
+import jaxopt
 
 from experiments.dnn.dnn_test_utils import start_test, get_config, write_config_to_file
 
@@ -90,21 +91,25 @@ def train_mnist(optimizer_name, learning_rate, momentum):
 
     train_data_gen = data_generator(x_train_normalized, y_train_ohe, batch_size=conf["batch_size"], is_valid=True)
 
-    # Use static learning_rate and momentum
-    optimizer = kfac_jax.Optimizer(
-        value_and_grad_func=jax.value_and_grad(loss_fn),
-        l2_reg=0.0,
-        value_func_has_aux=False,
-        value_func_has_state=False,
-        use_adaptive_learning_rate=True if conf["learning_rate"] is None else False,
-        use_adaptive_momentum=True if conf["momentum"] is None else False,
-        use_adaptive_damping=True,
-        initial_damping=1.0,
-        multi_device=False
-    )
-    rng = jax.random.PRNGKey(42)
-    rng, key = jax.random.split(rng)
-    opt_state = optimizer.init(net_params, key, list(train_data_gen)[0])
+    if conf["optimizer"] == "kfac":
+        optimizer = kfac_jax.Optimizer(
+            value_and_grad_func=jax.value_and_grad(loss_fn),
+            l2_reg=0.0,
+            value_func_has_aux=False,
+            value_func_has_state=False,
+            use_adaptive_learning_rate=True if conf["learning_rate"] is None else False,
+            use_adaptive_momentum=True if conf["momentum"] is None else False,
+            use_adaptive_damping=True,
+            initial_damping=1.0,
+            multi_device=False
+        )
+        rng = jax.random.PRNGKey(42)
+        rng, key = jax.random.split(rng)
+        opt_state = optimizer.init(net_params, key, list(train_data_gen)[0])
+    else:  # lbfgs
+        # Diverges with history_size=10, therefore use 20
+        optimizer = jaxopt.LBFGS(fun=jit(jax.value_and_grad(loss_fn)), value_and_grad=True, jit=True, stepsize=learning_rate, history_size=momentum)
+        opt_state = optimizer.init_state(net_params, list(train_data_gen)[0])
 
     ###############################    Training    ###############################
 
@@ -131,11 +136,16 @@ def train_mnist(optimizer_name, learning_rate, momentum):
         for step in range(num_train_batches):
             iteration_start = timer()
             batch_data = next(train_data_gen)
-            rng, key = jax.random.split(rng)
-            net_params, opt_state, stats = optimizer.step(net_params, opt_state, key, batch=batch_data, global_step_int=i*num_train_batches+step,
-                                                          learning_rate=conf["learning_rate"], momentum=conf["momentum"])
-            loss_value = stats['loss']
-            acc = calculate_accuracy(net_params, batch_data)
+            if conf["optimizer"] == "kfac":
+                rng, key = jax.random.split(rng)
+                net_params, opt_state, stats = optimizer.step(net_params, opt_state, key, batch=batch_data, global_step_int=i*num_train_batches+step,
+                                                              learning_rate=conf["learning_rate"], momentum=conf["momentum"])
+                loss_value = stats['loss']
+                acc = calculate_accuracy(net_params, batch_data)
+            else:  # lbfgs
+                net_params, opt_state = jit(optimizer.update)(net_params, opt_state, batch_data)
+                loss_value = opt_state.value
+                acc = calculate_accuracy(net_params, batch_data)
             iteration_end = timer()
 
             train_batch_loss.append(loss_value)
@@ -174,12 +184,18 @@ def train_mnist(optimizer_name, learning_rate, momentum):
 
 
 if __name__ == "__main__":
-    # None learning_rate indicates the optimizer to set use_adaptive_learning_rate to True and
-    # None momentum to set use_adaptive_momentum to True
+    # None learning_rate indicates K-FAC to set use_adaptive_learning_rate to True and
+    # None momentum to set use_adaptive_momentum to True.
     learning_rates = [None, 1e-3, 1e-2, 1e-1]
     momentums = [None, 0.1, 0.5, 0.9]
+    history_sizes = [10, 20, 40, 80, 100]
 
     # min_loss: 0.22080655 best_learning_rate: 0.001 best_momentum: 0.9
     for learning_rate in learning_rates:
         for momentum in momentums:
             train_mnist('kfac', learning_rate, momentum)
+
+    # 0 learning rate means using line search
+    for learning_rate in [0]:
+        for history_size in history_sizes:  # We use momentum as a placeholder
+            train_mnist('lbfgs', learning_rate, history_size)

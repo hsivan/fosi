@@ -16,6 +16,7 @@ from jax import random, jit
 import haiku as hk
 from haiku.nets import MobileNetV1
 import kfac_jax
+import jaxopt
 
 from experiments.dnn.dnn_test_utils import start_test, get_config, write_config_to_file
 from experiments.dnn.mobilenet_audioset import AudiosetDataset
@@ -59,6 +60,7 @@ def train_mobilenet(optimizer_name, learning_rate, momentum):
         # instead of 'has_aux=value_func_has_aux'.
         return (loss, (state, None))
 
+    @jit
     def calculate_accuracy(params, batch_data, state):
         """ Implements accuracy metric.
 
@@ -122,21 +124,24 @@ def train_mobilenet(optimizer_name, learning_rate, momentum):
     x = jnp.expand_dims(x, axis=0)
     net_params, state = model.init(random.PRNGKey(111), x, is_training=True)
 
-    # Use adaptive_learning_rate and adaptive_momentum
-    optimizer = kfac_jax.Optimizer(
-        value_and_grad_func=jax.value_and_grad(loss_fn, has_aux=True),
-        l2_reg=0.0,
-        value_func_has_aux=True,
-        value_func_has_state=True,
-        use_adaptive_learning_rate=True if conf["learning_rate"] is None else False,
-        use_adaptive_momentum=True if conf["momentum"] is None else False,
-        use_adaptive_damping=True,
-        initial_damping=1.0,
-        multi_device=False
-    )
-    rng = jax.random.PRNGKey(42)
-    rng, key = jax.random.split(rng)
-    opt_state = optimizer.init(net_params, key, batch, state)
+    if conf["optimizer"] == "kfac":
+        optimizer = kfac_jax.Optimizer(
+            value_and_grad_func=jax.value_and_grad(loss_fn, has_aux=True),
+            l2_reg=0.0,
+            value_func_has_aux=True,
+            value_func_has_state=True,
+            use_adaptive_learning_rate=True if conf["learning_rate"] is None else False,
+            use_adaptive_momentum=True if conf["momentum"] is None else False,
+            use_adaptive_damping=True,
+            initial_damping=1.0,
+            multi_device=False
+        )
+        rng = jax.random.PRNGKey(42)
+        rng, key = jax.random.split(rng)
+        opt_state = optimizer.init(net_params, key, batch, state)
+    else:  # lbfgs
+        optimizer = jaxopt.LBFGS(fun=jax.value_and_grad(loss_fn, has_aux=True), value_and_grad=True, has_aux=True, jit=True)
+        opt_state = optimizer.init_state(net_params, state, batch)
 
     ###############################    Training    ###############################
 
@@ -163,12 +168,18 @@ def train_mobilenet(optimizer_name, learning_rate, momentum):
             bd = (jnp.array(batch_data[0], jnp.float32), jnp.array(batch_data[1], jnp.int32))
             iteration_start = timer()
 
-            rng, key = jax.random.split(rng)
-            net_params, opt_state, state, stats = optimizer.step(net_params, opt_state, key, batch=bd, func_state=state,
-                                                                 global_step_int=i * num_train_batches + step,
-                                                                 learning_rate=conf["learning_rate"], momentum=conf["momentum"])
-            loss_value = stats['loss']
-            acc = calculate_accuracy(net_params, bd, state)
+            if conf["optimizer"] == "kfac":
+                rng, key = jax.random.split(rng)
+                net_params, opt_state, state, stats = optimizer.step(net_params, opt_state, key, batch=bd, func_state=state,
+                                                                     global_step_int=i * num_train_batches + step,
+                                                                     learning_rate=conf["learning_rate"], momentum=conf["momentum"])
+                loss_value = stats['loss']
+                acc = calculate_accuracy(net_params, bd, state)
+            else:  # lbfgs
+                net_params, opt_state = jax.jit(optimizer.update)(net_params, opt_state, state, bd)
+                state, _ = opt_state.aux
+                loss_value = opt_state.value
+                acc = calculate_accuracy(net_params, bd, state)
             iteration_end = timer()
 
             train_batch_loss.append(loss_value)
@@ -215,7 +226,9 @@ if __name__ == "__main__":
     learning_rates = [None, 1e-3, 1e-2, 1e-1]
     momentums = [None, 0.1, 0.5, 0.9]
 
-    # min_loss: 0.020915525 best_learning_rate: None best_momentum: 0.9
+    # min_loss: 0.0150796715 best_learning_rate: 0.01 best_momentum: 0.9
     for learning_rate in learning_rates:
         for momentum in momentums:
             train_mobilenet('kfac', learning_rate, momentum)
+
+    train_mobilenet('lbfgs', None, None)

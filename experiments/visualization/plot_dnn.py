@@ -11,7 +11,8 @@ mapping = {'adam': ('tab:blue', '--', 'Adam'),
            'fosi_adam': ('tab:blue', '-', 'FOSI-Adam'),
            'momentum': ('tab:orange', '--', 'HB'),
            'fosi_momentum': ('tab:orange', '-', 'FOSI-HB'),
-           'kfac': ('tab:red', '-', 'K-FAC')
+           'kfac': ('tab:red', '-', 'K-FAC'),
+           'lbfgs': ('tab:green', '-', 'L-BFGS')
            }
 
 
@@ -22,7 +23,7 @@ def read_config_file(test_folder):
     return conf
 
 
-def get_kfac_best_config_test_folder(test_result_root_folder, learning_rates, momentums):
+def get_best_config_test_folder(optimizer_name, test_result_root_folder, learning_rates, momentums):
     # Find the configuration that obtained the smallest loss value and return the corresponding result folder
     min_loss = np.inf
     best_result_folder = None
@@ -32,7 +33,7 @@ def get_kfac_best_config_test_folder(test_result_root_folder, learning_rates, mo
         for momentum in momentums:
             # Find the last result folder with learning_rate and momentum
             test_folders = [test_result_root_folder + f for f in os.listdir(test_result_root_folder) if
-                            f.startswith('results_kfac_')]
+                            f.startswith('results_'+optimizer_name+'_')]
             test_folders.sort()
             for test_folder in test_folders[::-1]:
                 conf = read_config_file(test_folder)
@@ -62,7 +63,12 @@ def get_test_folders(test_result_root_folder):
         test_folders.append(last_folder)
 
     # Add K-FAC
-    last_folder = get_kfac_best_config_test_folder(test_result_root_folder, learning_rates=[None, 1e-3, 1e-2, 1e-1], momentums=[None, 0.1, 0.5, 0.9])
+    last_folder = get_best_config_test_folder('kfac', test_result_root_folder, learning_rates=[None, 1e-3, 1e-2, 1e-1], momentums=[None, 0.1, 0.5, 0.9])
+    if last_folder is not None:
+        test_folders.append(last_folder)
+
+    # Add L-BFGS
+    last_folder = get_best_config_test_folder('lbfgs', test_result_root_folder, learning_rates=[0], momentums=[10, 20, 40, 80, 100])  # momentum is actually history_size
     if last_folder is not None:
         test_folders.append(last_folder)
 
@@ -209,11 +215,12 @@ def plot_loss_and_accuracy_for_mobilenet(test_result_root_folder, fig_file_name,
 
 
 def plot_train_loss_over_iterations_and_wall_time_and_validation_loss(test_result_root_folder, fig_file_name, y_top_lim, y_bottom_lim=None, max_data_point=None, x_label='epoch', skip_val=1):
-    set_rc_params()
+    scaling_factor = 1 if '.pdf' in fig_file_name else 1.5
+    set_rc_params(scaling_factor)
 
     test_folders = get_test_folders(test_result_root_folder)
 
-    fig, axes = plt.subplots(1, 3, sharey=True, figsize=get_figsize(hf=0.4))
+    fig, axes = plt.subplots(1, 3, sharey=True, figsize=get_figsize(wf=scaling_factor, hf=0.4))
 
     min_val = np.inf
     tenth_min_val = np.inf
@@ -233,11 +240,11 @@ def plot_train_loss_over_iterations_and_wall_time_and_validation_loss(test_resul
 
         ax = axes[0]
         ax.plot(df['epoch'][:max_data_point][df['train_loss'] != 0], df['train_loss'][:max_data_point][df['train_loss'] != 0],
-                label=mapping[optimizer][2], color=mapping[optimizer][0], linestyle=mapping[optimizer][1], linewidth=0.7)
+                label=mapping[optimizer][2], color=mapping[optimizer][0], linestyle=mapping[optimizer][1], linewidth=0.7*scaling_factor)
 
         ax = axes[1]
         ax.plot(df['wall_time'][:max_data_point][df['train_loss'] != 0], df['train_loss'][:max_data_point][df['train_loss'] != 0],
-                label=mapping[optimizer][2], color=mapping[optimizer][0], linestyle=mapping[optimizer][1], linewidth=0.7)
+                label=mapping[optimizer][2], color=mapping[optimizer][0], linestyle=mapping[optimizer][1], linewidth=0.7*scaling_factor)
         if optimizer != 'kfac' and df['wall_time'][:max_data_point][df['train_loss'] != 0].iloc[-1] > max_y_wall_time:
             max_y_wall_time = df['wall_time'][:max_data_point][df['train_loss'] != 0].iloc[-1]
         if optimizer == 'kfac':
@@ -245,7 +252,7 @@ def plot_train_loss_over_iterations_and_wall_time_and_validation_loss(test_resul
 
         ax = axes[2]
         ax.plot(df['epoch'][:max_data_point][df['val_loss'] != 0][::skip_val], df['val_loss'][:max_data_point][df['val_loss'] != 0][::skip_val],
-                label=mapping[optimizer][2], color=mapping[optimizer][0], linestyle=mapping[optimizer][1], linewidth=0.7)
+                label=mapping[optimizer][2], color=mapping[optimizer][0], linestyle=mapping[optimizer][1], linewidth=0.7*scaling_factor)
 
     axes[0].set_xlabel(x_label)
     axes[0].set_ylabel('train loss')
@@ -257,7 +264,7 @@ def plot_train_loss_over_iterations_and_wall_time_and_validation_loss(test_resul
             if wall_time > max_y_wall_time:
                 max_y_wall_time = wall_time
                 break
-    axes[1].set_xlim(right=max_y_wall_time)  # Cut the x-axis at the end of FOSI's graph, not K-FAC
+    #axes[1].set_xlim(right=max_y_wall_time)  # Cut the x-axis at the end of FOSI's graph, not K-FAC
     axes[1].set_xlabel('wall time (seconds)')
     axes[1].set_ylabel('train loss')
     axes[2].set_xlabel(x_label)
@@ -378,15 +385,23 @@ if __name__ == "__main__":
     plot_train_loss_over_iterations_and_wall_time(root_result_folder + 'test_results_rnn_shakespeare/', 'rnn_shakespeare_fosi_vs_base.pdf', 2.4, max_data_point=71, x_label='iteration')
     '''
 
+    plot_train_loss_over_iterations_and_wall_time_and_validation_loss(root_result_folder + 'test_results_logistic_regression_mnist/', 'mnist_fosi_vs_base_train_val.png', 0.3)
     plot_train_loss_over_iterations_and_wall_time_and_validation_loss(root_result_folder + 'test_results_logistic_regression_mnist/', 'mnist_fosi_vs_base_train_val.pdf', 0.3)
 
+    # L-BFGS diverges for any history_size at the first epoch, therefore not included
+    plot_train_loss_over_iterations_and_wall_time_and_validation_loss(root_result_folder + 'test_results_autoencoder_cifar10/', "autoencoder_cifar10_fosi_vs_base_train_val_128.png", y_top_lim=60)
     plot_train_loss_over_iterations_and_wall_time_and_validation_loss(root_result_folder + 'test_results_autoencoder_cifar10/', "autoencoder_cifar10_fosi_vs_base_train_val_128.pdf", y_top_lim=60)
 
+    # L-BFGS not included since its performance is bad (its loss is an order of magnitude larger and it runs 8x times slower) and distorts the figure
+    plot_train_loss_over_iterations_and_wall_time_and_validation_loss(root_result_folder + 'test_results_transfer_learning_cifar10/', 'transfer_learning_fosi_vs_base_train_val.png', 0.8)
     plot_train_loss_over_iterations_and_wall_time_and_validation_loss(root_result_folder + 'test_results_transfer_learning_cifar10/', 'transfer_learning_fosi_vs_base_train_val.pdf', 0.8)
 
-    plot_train_loss_over_iterations_and_wall_time_and_validation_loss(root_result_folder + 'test_results_rnn_shakespeare/', 'rnn_shakespeare_fosi_vs_base_train_val.pdf', 2.4,  max_data_point=71, x_label='iteration')
+    # K-FAC throws exception for RNN.
+    plot_train_loss_over_iterations_and_wall_time_and_validation_loss(root_result_folder + 'test_results_rnn_shakespeare/', 'rnn_shakespeare_fosi_vs_base_train_val.png', 3.5,  max_data_point=71, x_label='iteration')
+    plot_train_loss_over_iterations_and_wall_time_and_validation_loss(root_result_folder + 'test_results_rnn_shakespeare/', 'rnn_shakespeare_fosi_vs_base_train_val.pdf', 3.5, max_data_point=71, x_label='iteration')
 
-    plot_train_loss_over_iterations_and_wall_time_and_validation_loss(root_result_folder + 'test_results_mobilenet_audioset/', 'audioset_fosi_vs_base_train_val.pdf', 0.03, y_bottom_lim=0.013, skip_val=5)
+    plot_train_loss_over_iterations_and_wall_time_and_validation_loss(root_result_folder + 'test_results_mobilenet_audioset/', 'audioset_fosi_vs_base_train_val.png', 0.035, y_bottom_lim=0.013, skip_val=5)
+    plot_train_loss_over_iterations_and_wall_time_and_validation_loss(root_result_folder + 'test_results_mobilenet_audioset/', 'audioset_fosi_vs_base_train_val.pdf', 0.035, y_bottom_lim=0.013, skip_val=5)
 
     plot_loss_and_accuracy_for_mobilenet(root_result_folder + 'test_results_mobilenet_audioset/', 'audioset_fosi_vs_base_train_val_acc.pdf', 0.03, y_bottom_lim=0.013, skip_val=5)
     plot_train_loss_over_iterations_and_wall_time_and_validation_accuracy(root_result_folder + 'test_results_mobilenet_audioset/', 'audioset_fosi_vs_base_train_val_losses.pdf', 0.025, y_bottom_lim=0.013, skip_val=5)

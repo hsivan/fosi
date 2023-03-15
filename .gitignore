@@ -44,7 +44,8 @@ pip-delete-this-directory.txt
 # Test results
 test_results*
 *.pkl
-figures
+#figures
+for_presentation
 result_summary
 *.pem
 new_user_credentials.csv

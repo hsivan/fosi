@@ -20,6 +20,7 @@ import jax
 from jax import lax
 import jax.numpy as jnp
 import kfac_jax
+import jaxopt
 
 from experiments.dnn.dnn_test_utils import get_config, start_test, write_config_to_file, get_optimizer
 
@@ -143,9 +144,9 @@ def sample(
     return values.tokens
 
 
-def main(optimizer_name):
-    conf = get_config(optimizer=optimizer_name, approx_k=10, batch_size=TRAIN_BATCH_SIZE, momentum=0.1,
-                      learning_rate=1e-2, num_iterations_between_ese=800, approx_l=0, alpha=0.01)
+def main(optimizer_name, learning_rate, momentum):
+    conf = get_config(optimizer=optimizer_name, approx_k=10, batch_size=TRAIN_BATCH_SIZE, momentum=momentum,
+                      learning_rate=learning_rate, num_iterations_between_ese=800, approx_l=0, alpha=0.01)
     test_folder = start_test(conf["optimizer"], test_folder='test_results_rnn_shakespeare')
     write_config_to_file(test_folder, conf)
 
@@ -180,23 +181,28 @@ def main(optimizer_name):
     rng = hk.PRNGSequence(SEED)
     net_params = params_init(next(rng), next(train_data))
 
-    # Throws exception "The following parameter indices were not assigned a block: {1, 3, 5, 7}.". When using
-    # hk.static_unroll instead of hk.dynamic_unroll, the exception is that layers where assigned multiple tags.
-    optimizer = kfac_jax.Optimizer(
-        value_and_grad_func=jax.value_and_grad(loss_fn),
-        l2_reg=0.0,
-        value_func_has_aux=False,
-        value_func_has_state=False,
-        value_func_has_rng=False,
-        use_adaptive_learning_rate=False,
-        use_adaptive_momentum=False,
-        use_adaptive_damping=True,
-        initial_damping=1.0,
-        multi_device=False,
-    )
-    rng = jax.random.PRNGKey(42)
-    rng, key = jax.random.split(rng)
-    opt_state = optimizer.init(net_params, key, next(train_data))
+    if conf["optimizer"] == "kfac":
+        # Throws exception "The following parameter indices were not assigned a block: {1, 3, 5, 7}.". When using
+        # hk.static_unroll instead of hk.dynamic_unroll, the exception is that layers where assigned multiple tags.
+        optimizer = kfac_jax.Optimizer(
+            value_and_grad_func=jax.value_and_grad(loss_fn),
+            l2_reg=0.0,
+            value_func_has_aux=False,
+            value_func_has_state=False,
+            value_func_has_rng=False,
+            use_adaptive_learning_rate=False,
+            use_adaptive_momentum=False,
+            use_adaptive_damping=True,
+            initial_damping=1.0,
+            multi_device=False,
+        )
+        rng = jax.random.PRNGKey(42)
+        rng, key = jax.random.split(rng)
+        opt_state = optimizer.init(net_params, key, next(train_data))
+    else:  # lbfgs
+        # Diverges with history_size=10, therefore use 20
+        optimizer = jaxopt.LBFGS(fun=jax.value_and_grad(loss_fn), value_and_grad=True, jit=True, stepsize=learning_rate, history_size=momentum)
+        opt_state = optimizer.init_state(net_params, next(train_data))
 
     epoch_start = timer()
 
@@ -205,10 +211,15 @@ def main(optimizer_name):
 
         # Do a batch of SGD.
         train_batch = next(train_data)
-        rng, key = jax.random.split(rng)
-        net_params, opt_state, stats = optimizer.step(net_params, opt_state, key, batch=train_batch,
-                                                      global_step_int=step,
-                                                      learning_rate=conf["learning_rate"], momentum=conf["momentum"])
+
+        if conf["optimizer"] == "kfac":
+            rng, key = jax.random.split(rng)
+            net_params, opt_state, stats = optimizer.step(net_params, opt_state, key, batch=train_batch,
+                                                          global_step_int=step,
+                                                          learning_rate=conf["learning_rate"], momentum=conf["momentum"])
+        else:  # lbfgs
+            net_params, opt_state = jax.jit(optimizer.update)(net_params, opt_state, train_batch)
+
         state = TrainingState(params=net_params, opt_state=opt_state)
 
         # Periodically generate samples.
@@ -253,4 +264,15 @@ def main(optimizer_name):
 
 
 if __name__ == '__main__':
-    main('kfac')
+    history_sizes = [10, 20, 40, 80, 100]
+
+    try:
+        main('kfac', None, None)
+    except Exception as e:
+        # TODO: could not get K-FAC to work for RNN.
+        print(e)
+
+    # 0 learning rate means using line search
+    for learning_rate in [0]:
+        for history_size in history_sizes:  # We use momentum as a placeholder
+            main('lbfgs', learning_rate, history_size)

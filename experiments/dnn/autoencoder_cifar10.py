@@ -226,13 +226,13 @@ class TrainerModule:
 
         optimizer = optax.chain(
             optax.clip(1.0),  # Clip gradients at 1
-            get_optimizer(conf, self.loss_fn, next(iter(train_loader)))
+            get_optimizer(self.conf, self.loss_fn, next(iter(train_loader)))
         )
 
         # Initialize training state
         self.state = train_state.TrainState.create(apply_fn=self.model.apply, params=params, tx=optimizer)
 
-    def train_model(self):
+    def train_model(self, train_stats_file):
         # Train model for defined number of epochs
         best_eval = 1e6
         start_time = 1e10
@@ -277,27 +277,31 @@ class TrainerModule:
         return avg_loss
 
 
-def train_cifar(latent_dim, conf=None):
+def train_cifar(latent_dim, conf, train_stats_file):
     # Create a trainer module with specified hyperparameters
     trainer = TrainerModule(c_hid=32, latent_dim=latent_dim, conf=conf)
-    trainer.train_model()
+    trainer.train_model(train_stats_file)
     test_loss = trainer.eval_model(test_loader)
     # Bind parameters to model for easier inference
     trainer.model_bd = trainer.model.bind({'params': trainer.state.params})
     return trainer, test_loss
 
 
+def main(optimizer_name, learning_rate, momentum):
+    conf = get_config(optimizer=optimizer_name, approx_k=10, batch_size=256, learning_rate=learning_rate, momentum=momentum,
+                      num_iterations_between_ese=800, approx_l=0, alpha=0.01, learning_rate_clip=1.0)
+    test_folder = start_test(conf["optimizer"], test_folder='test_results_autoencoder_cifar10')
+    write_config_to_file(test_folder, conf)
+
+    train_stats_file = test_folder + "/train_stats.csv"
+    with open(train_stats_file, 'w') as f:
+        writer = csv.writer(f)
+        writer.writerow(["epoch", "train_loss", "val_loss", "latency", "wall_time"])
+
+    _, _ = train_cifar(128, conf, train_stats_file)
+
+
 if __name__ == "__main__":
     for optimizer_name in ['fosi_momentum', 'momentum', 'fosi_adam', 'adam']:
         # Heavy-Ball (momentum) diverges with learning rate 1e-2. Using 1e-3 instead.
-        conf = get_config(optimizer=optimizer_name, approx_k=10, batch_size=256, learning_rate=1e-3,
-                          num_iterations_between_ese=800, approx_l=0, alpha=0.01, learning_rate_clip=1.0)
-        test_folder = start_test(conf["optimizer"], test_folder='test_results_autoencoder_cifar10')
-        write_config_to_file(test_folder, conf)
-
-        train_stats_file = test_folder + "/train_stats.csv"
-        with open(train_stats_file, 'w') as f:
-            writer = csv.writer(f)
-            writer.writerow(["epoch", "train_loss", "val_loss", "latency", "wall_time"])
-
-        _, _ = train_cifar(128, conf=conf)
+        main(optimizer_name, 1e-3, 0.9)

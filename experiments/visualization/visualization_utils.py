@@ -26,9 +26,9 @@ def get_figsize(columnwidth=234.8775, wf=1.0, hf=(5. ** 0.5 - 1.0) / 2.0, b_fixe
     return [fig_width, fig_height]
 
 
-def set_rc_params():
+def set_rc_params(scaling_factor=1):
     rcParams['pdf.fonttype'] = 42
     rcParams['ps.fonttype'] = 42
-    rcParams.update({'legend.fontsize': 5.4})
-    rcParams.update({'font.size': 5.8})
-    rcParams['axes.titlesize'] = 5.8
+    rcParams.update({'legend.fontsize': scaling_factor*5.4})
+    rcParams.update({'font.size': scaling_factor*5.8})
+    rcParams['axes.titlesize'] = scaling_factor*5.8

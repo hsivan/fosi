@@ -16,6 +16,7 @@ from jax.flatten_util import ravel_pytree
 import jax.numpy as jnp
 import optax
 import kfac_jax
+import jaxopt
 
 from experiments.dnn.dnn_test_utils import get_config, start_test, write_config_to_file
 from experiments.dnn.transfer_learning_cifar10 import get_model_and_variables, Config, train_dataset, accuracy, \
@@ -56,21 +57,25 @@ def train_transfer_learning(optimizer_name, learning_rate, momentum):
 
     print("Number of frozen parameters:", ravel_pytree(variables['params']['backbone'])[0].shape[0])
 
-    # Use static learning_rate and momentum
-    optimizer = kfac_jax.Optimizer(
-        value_and_grad_func=jax.value_and_grad(loss_fn, has_aux=True),
-        l2_reg=0.0,
-        value_func_has_aux=True,
-        value_func_has_state=True,
-        use_adaptive_learning_rate=True if conf["learning_rate"] is None else False,
-        use_adaptive_momentum=True if conf["momentum"] is None else False,
-        use_adaptive_damping=True,
-        initial_damping=1.0,
-        multi_device=False
-    )
-    rng = jax.random.PRNGKey(42)
-    rng, key = jax.random.split(rng)
-    opt_state = optimizer.init(variables['params'], key, batch, variables['batch_stats'])
+    if conf["optimizer"] == "kfac":
+        optimizer = kfac_jax.Optimizer(
+            value_and_grad_func=jax.value_and_grad(loss_fn, has_aux=True),
+            l2_reg=0.0,
+            value_func_has_aux=True,
+            value_func_has_state=True,
+            use_adaptive_learning_rate=True if conf["learning_rate"] is None else False,
+            use_adaptive_momentum=True if conf["momentum"] is None else False,
+            use_adaptive_damping=True,
+            initial_damping=1.0,
+            multi_device=False
+        )
+        rng = jax.random.PRNGKey(42)
+        rng, key = jax.random.split(rng)
+        opt_state = optimizer.init(variables['params'], key, batch, variables['batch_stats'])
+    else:  # lbfgs
+        # Diverges with history_size=10, therefore use 20
+        optimizer = jaxopt.LBFGS(fun=jax.value_and_grad(loss_fn, has_aux=True), value_and_grad=True, has_aux=True, jit=True, stepsize=learning_rate, history_size=momentum)
+        opt_state = optimizer.init_state(variables['params'], variables['batch_stats'], batch)
 
     params = variables['params']
     batch_stats = variables['batch_stats']
@@ -93,13 +98,19 @@ def train_transfer_learning(optimizer_name, learning_rate, momentum):
                 batch_ = (jnp.array(batch[0], dtype=jnp.float32), jnp.array(batch[1], dtype=jnp.float32))
 
                 # backprop and update param & batch stats
-                rng, key = jax.random.split(rng)
-                params, opt_state, batch_stats, stats = optimizer.step(params, opt_state, key, batch=batch_,
-                                                                       func_state=batch_stats, global_step_int=epoch_i * iter_n + batch_i,
-                                                                       learning_rate=conf["learning_rate"], momentum=conf["momentum"])
-                # update train statistics
-                train_loss.append(stats['loss'])
-                train_accuracy.append(stats["aux"])
+                if conf["optimizer"] == "kfac":
+                    rng, key = jax.random.split(rng)
+                    params, opt_state, batch_stats, stats = optimizer.step(params, opt_state, key, batch=batch_,
+                                                                           func_state=batch_stats, global_step_int=epoch_i * iter_n + batch_i,
+                                                                           learning_rate=conf["learning_rate"], momentum=conf["momentum"])
+                    # update train statistics
+                    train_loss.append(stats['loss'])
+                    train_accuracy.append(stats["aux"])
+                else:  # lbfgs
+                    net_params, opt_state = jax.jit(optimizer.update)(params, opt_state, batch_stats, batch_)
+                    batch_stats, acc = opt_state.aux
+                    train_loss.append(opt_state.value)
+                    train_accuracy.append(acc)
                 progress_bar.update(1)
 
         epoch_end = timer()
@@ -137,12 +148,18 @@ def train_transfer_learning(optimizer_name, learning_rate, momentum):
 
 
 if __name__ == "__main__":
-    # None learning_rate indicates the optimizer to set use_adaptive_learning_rate to True and
+    # None learning_rate indicates K-FAC to set use_adaptive_learning_rate to True and
     # None momentum to set use_adaptive_momentum to True
     learning_rates = [None, 1e-3, 1e-2, 1e-1]
     momentums = [None, 0.1, 0.5, 0.9]
+    history_sizes = [10, 20, 40, 80, 100]
 
     # min_loss: 0.5556641 best_learning_rate: 0.001 best_momentum: 0.1
     for learning_rate in learning_rates:
         for momentum in momentums:
             train_transfer_learning('kfac', learning_rate, momentum)
+
+    # 0 learning rate means using line search
+    for learning_rate in [0]:
+        for history_size in history_sizes:  # We use momentum as a placeholder
+            train_transfer_learning('lbfgs', learning_rate, history_size)

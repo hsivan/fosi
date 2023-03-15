@@ -91,10 +91,10 @@ python autoencoder_cifar10.py
 python rnn_shakespeare.py
 python mobilenet_audioset.py
 
-python logistic_regression_mnist_kfac.py
-python transfer_learning_cifar10_kfac.py
-python autoencoder_cifar10_kfac.py
-python mobilenet_audioset_kfac.py
+python logistic_regression_mnist_kfac_lbfgs.py
+python transfer_learning_cifar10_kfac_lbfgs.py
+python autoencoder_cifar10_kfac_lbfgs.py
+python mobilenet_audioset_kfac_lbfgs.py
 ```
 
 After running all the experiments, run the following to generate the figures:

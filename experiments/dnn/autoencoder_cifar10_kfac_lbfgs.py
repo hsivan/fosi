@@ -13,6 +13,7 @@ from timeit import default_timer as timer
 
 import jax
 import kfac_jax
+import jaxopt
 
 from experiments.dnn.dnn_test_utils import start_test, get_config, write_config_to_file
 from experiments.dnn.autoencoder_cifar10 import Autoencoder, val_loader, train_loader, test_loader
@@ -53,29 +54,32 @@ class TrainerModule:
         rng = jax.random.PRNGKey(self.seed)
         rng, init_rng = jax.random.split(rng)
         params = self.model.init(init_rng, self.exmp_imgs)['params']
+        self.params = params
 
         # Initialize learning rate schedule and optimizer
         print("len(train_loader)", len(train_loader))
 
-        # Use adaptive_learning_rate and adaptive_momentum
-        optimizer = kfac_jax.Optimizer(
-            value_and_grad_func=jax.value_and_grad(self.loss_fn),
-            l2_reg=0.0,
-            value_func_has_aux=False,
-            value_func_has_state=False,
-            use_adaptive_learning_rate=True if self.conf["learning_rate"] is None else False,
-            use_adaptive_momentum=True if self.conf["momentum"] is None else False,
-            use_adaptive_damping=True,
-            initial_damping=1.0,
-            multi_device=False
-        )
-        self.optimizer = optimizer
-        rng = jax.random.PRNGKey(42)
-        rng, key = jax.random.split(rng)
-        self.opt_state = optimizer.init(params, key, next(iter(train_loader)))
-        self.params = params
+        if self.conf["optimizer"] == "kfac":
+            self.optimizer = kfac_jax.Optimizer(
+                value_and_grad_func=jax.value_and_grad(self.loss_fn),
+                l2_reg=0.0,
+                value_func_has_aux=False,
+                value_func_has_state=False,
+                use_adaptive_learning_rate=True if self.conf["learning_rate"] is None else False,
+                use_adaptive_momentum=True if self.conf["momentum"] is None else False,
+                use_adaptive_damping=True,
+                initial_damping=1.0,
+                multi_device=False
+            )
+            rng = jax.random.PRNGKey(42)
+            rng, key = jax.random.split(rng)
+            self.opt_state = self.optimizer.init(params, key, next(iter(train_loader)))
+        else:  # lbfgs
+            # Diverges with history_size=5, 10, 20, 30, 50, and 100. Could not get it work on this task.
+            self.optimizer = jaxopt.LBFGS(fun=jax.value_and_grad(self.loss_fn), value_and_grad=True, jit=True, stepsize=self.conf["learning_rate"], history_size=self.conf["momentum"])
+            self.opt_state = self.optimizer.init_state(params, next(iter(train_loader)))
 
-    def train_model(self):
+    def train_model(self, train_stats_file):
         # Train model for defined number of epochs
         best_eval = 1e6
         start_time = 1e10
@@ -108,11 +112,15 @@ class TrainerModule:
         rng = jax.random.PRNGKey(42)
 
         for step, batch in enumerate(train_loader):
-            rng, key = jax.random.split(rng)
-            self.params, self.opt_state, stats = self.optimizer.step(self.params, self.opt_state, key, batch=batch,
-                                                                     global_step_int=epoch * num_train_batches + step,
-                                                                     learning_rate=self.conf["learning_rate"], momentum=self.conf["momentum"])
-            loss = stats['loss']
+            if self.conf["optimizer"] == "kfac":
+                rng, key = jax.random.split(rng)
+                self.params, self.opt_state, stats = self.optimizer.step(self.params, self.opt_state, key, batch=batch,
+                                                                         global_step_int=epoch * num_train_batches + step,
+                                                                         learning_rate=self.conf["learning_rate"], momentum=self.conf["momentum"])
+                loss = stats['loss']
+            else:  # lbfgs
+                self.params, self.opt_state = jax.jit(self.optimizer.update)(self.params, self.opt_state, batch)
+                loss = self.opt_state.value
             losses.append(loss)
         losses_np = np.stack(jax.device_get(losses))
         avg_loss = losses_np.mean()
@@ -132,33 +140,43 @@ class TrainerModule:
         return avg_loss
 
 
-def train_cifar(latent_dim, conf=None):
+def train_cifar(latent_dim, conf, train_stats_file):
     # Create a trainer module with specified hyperparameters
     trainer = TrainerModule(c_hid=32, latent_dim=latent_dim, conf=conf)
-    trainer.train_model()
+    trainer.train_model(train_stats_file)
     test_loss = trainer.eval_model(test_loader)
     # Bind parameters to model for easier inference
     trainer.model_bd = trainer.model.bind({'params': trainer.params})
     return trainer, test_loss
 
 
+def main(optimizer_name, learning_rate, momentum):
+    conf = get_config(optimizer=optimizer_name, approx_k=10, batch_size=256, learning_rate=learning_rate, momentum=momentum,
+                      num_iterations_between_ese=800, approx_l=0, alpha=0.01, learning_rate_clip=1.0)
+    test_folder = start_test(conf["optimizer"], test_folder='test_results_autoencoder_cifar10')
+    write_config_to_file(test_folder, conf)
+
+    train_stats_file = test_folder + "/train_stats.csv"
+    with open(train_stats_file, 'w') as f:
+        writer = csv.writer(f)
+        writer.writerow(["epoch", "train_loss", "val_loss", "latency", "wall_time"])
+
+    _, _ = train_cifar(128, conf, train_stats_file)
+
+
 if __name__ == "__main__":
-    # None learning_rate indicates the optimizer to set use_adaptive_learning_rate to True and
+    # None learning_rate indicates K-FAC to set use_adaptive_learning_rate to True and
     # None momentum to set use_adaptive_momentum to True
     learning_rates = [None, 1e-3, 1e-2, 1e-1]
     momentums = [None, 0.1, 0.5, 0.9]
+    history_sizes = [10, 20, 40, 80, 100]
 
     # min_loss: 49.601337 best_learning_rate: None best_momentum: None
     for learning_rate in learning_rates:
         for momentum in momentums:
-            conf = get_config(optimizer='kfac', approx_k=10, batch_size=256, learning_rate=learning_rate, momentum=momentum,
-                              num_iterations_between_ese=800, approx_l=0, alpha=0.01, learning_rate_clip=1.0)
-            test_folder = start_test(conf["optimizer"], test_folder='test_results_autoencoder_cifar10')
-            write_config_to_file(test_folder, conf)
+            main('kfac', learning_rate, momentum)
 
-            train_stats_file = test_folder + "/train_stats.csv"
-            with open(train_stats_file, 'w') as f:
-                writer = csv.writer(f)
-                writer.writerow(["epoch", "train_loss", "val_loss", "latency", "wall_time"])
-
-            _, _ = train_cifar(128, conf=conf)
+    # 0 learning rate means using line search
+    for learning_rate in [0]:
+        for history_size in history_sizes:  # We use momentum as a placeholder
+            main('lbfgs', learning_rate, history_size)
