@@ -752,6 +752,153 @@ def plot_quadratic_jax_kappa_zeta_learning_rate_single_func():
     rcParams.update(rcParamsDefault)
 
 
+def plot_quadratic_jax_kappa_zeta_learning_rate_momentum_single_func_adam(fig_type='pdf'):
+    scaling_factor = 1.0 if 'pdf' in fig_type else 1.5
+    kappa_dim_non_diag_tuples = zip([90], [1.12])
+
+    set_rc_params(scaling_factor)
+
+    optimizers_colors = {'Adam': 'black', 'FOSI-Adam': 'tab:blue'}
+
+    fig, axs = plt.subplots(1, 3, figsize=get_figsize(wf=scaling_factor, hf=0.4), sharex=True, sharey='row')
+
+    dim_non_diag, kappa = next(kappa_dim_non_diag_tuples)
+
+    lr_pkl_file_name = root_result_folder + "quadratic_jax_kappa_zeta_lr_" + str(kappa).replace('.', '-') + '_' + str(dim_non_diag) + ".pkl"
+    optimizers_scores = pickle.load(open(lr_pkl_file_name, 'rb'))
+    ax = axs[0]
+
+    for optimizer in ['Adam', 'FOSI-Adam']:
+        res = optimizers_scores[optimizer]
+        res.sort(key=lambda val: val[0])
+        res = list(zip(*res))
+
+        eta_arr = np.array(res[0])
+        scores_arr = np.array(res[1])
+
+        scores_arr = np.nan_to_num(scores_arr, nan=np.inf)
+
+        linestyle = '-' if 'FOSI' in optimizer else '--'
+        linewidth = 0.7*scaling_factor if 'FOSI' in optimizer else 1.2*scaling_factor
+        ax.plot(eta_arr, scores_arr, label=optimizer, color=optimizers_colors[optimizer], linestyle=linestyle, linewidth=linewidth)
+        print(optimizer, "best LR:", eta_arr[np.argmin(scores_arr)])
+
+    ax.set_xscale('log')
+    ax.set_yscale('log')
+    ax.set_ylim(1e-3, 450)
+    ax.set_ylabel(r'$f_{' + str(kappa) + r',' + str(dim_non_diag) + r'}(\theta_{200})$')
+    ax.set_xlabel(r'$\eta$', labelpad=0)
+
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+    ax.spines['bottom'].set_linewidth(0.5)
+    ax.spines['left'].set_linewidth(0.5)
+    ax.tick_params(width=0.5)
+
+    # Optimal beta1 for different lerning rates
+    lr_pkl_file_name = root_result_folder + "quadratic_jax_kappa_zeta_lr_momentum_" + str(kappa).replace('.', '-') + '_' + str(dim_non_diag) + ".pkl"
+    optimizers_scores = pickle.load(open(lr_pkl_file_name, 'rb'))
+    ax = axs[1]
+
+    for optimizer in ['Adam', 'FOSI-Adam']:
+        res = optimizers_scores[optimizer]
+        res.sort(key=lambda val: val[0])
+        res = list(zip(*res))
+
+        eta_arr = np.array(res[0])
+        scores_arr = np.array(res[2])
+
+        scores_arr = np.nan_to_num(scores_arr, nan=np.inf)
+
+        linestyle = '-' if 'FOSI' in optimizer else '--'
+        linewidth = 0.7*scaling_factor if 'FOSI' in optimizer else 1.2*scaling_factor
+        ax.plot(eta_arr, scores_arr, label=optimizer, color=optimizers_colors[optimizer], linestyle=linestyle, linewidth=linewidth)
+        print(optimizer, "best LR:", eta_arr[np.argmin(scores_arr)])
+
+    ax.set_xscale('log')
+    ax.set_yscale('log')
+    ax.set_ylim(1e-3, 450)
+    ax.set_xlim(1e-4)
+    ax.set_xlabel(r'$\eta$', labelpad=0)
+
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+    ax.spines['bottom'].set_linewidth(0.5)
+    ax.spines['left'].set_linewidth(0.5)
+    ax.tick_params(width=0.5)
+
+    axs[2].spines['right'].set_visible(False)
+    axs[2].spines['top'].set_visible(False)
+    axs[2].spines['left'].set_visible(False)
+    axs[2].spines['bottom'].set_visible(False)
+    axs[2].get_xaxis().set_visible(False)
+    axs[2].get_yaxis().set_visible(False)
+
+    axs[0].annotate(r'$\beta_1=0.9$' + '\n' + r'$\beta_2=0.999$', xy=(0.37, 0.7), xycoords='axes fraction', xytext=(0, 0),
+                      textcoords='offset pixels', horizontalalignment='left', verticalalignment='bottom',
+                      fontsize=5.8 * scaling_factor)
+    axs[1].annotate(r'$\beta_1=$' + r'tuned per $\eta$' + '\n' + r'$\beta_2=0.999$', xy=(0.37, 0.7), xycoords='axes fraction', xytext=(0, 0),
+                    textcoords='offset pixels', horizontalalignment='left', verticalalignment='bottom',
+                    fontsize=5.8 * scaling_factor)
+
+    handles, labels = axs[0].get_legend_handles_labels()
+    fig.legend(handles, labels, framealpha=0, frameon=False, loc="upper center", bbox_to_anchor=(0.4, 1.0), ncol=2, columnspacing=1.5, handletextpad=0.29)
+    plt.subplots_adjust(top=0.85, bottom=0.2, left=0.14, right=0.99, wspace=0.2)
+
+    plt.savefig(output_folder + "quadratic_jax_kappa_zeta_lr_momentum_single_func_adam." + fig_type)
+    plt.close(fig)
+
+
+    # different beta1 for beta2=0.99, 0.999, 0.9999
+    fig, axs = plt.subplots(1, 3, figsize=get_figsize(wf=scaling_factor, hf=0.4), sharex=True, sharey='row')
+    lr_pkl_file_name = root_result_folder + "quadratic_jax_kappa_zeta_momentum_" + str(kappa).replace('.', '-') + '_' + str(dim_non_diag) + ".pkl"
+    optimizers_scores = pickle.load(open(lr_pkl_file_name, 'rb'))
+    beta2_vals = [0.99, 0.999, 0.9999]
+
+    for optimizer in ['Adam', 'FOSI-Adam']:
+        res = optimizers_scores[optimizer]
+        res.sort(key=lambda val: val[0])
+        res = list(zip(*res))
+
+        beta2_arr = np.array(res[0])
+        beta1_arr = np.array(res[1])
+        scores_arr = np.array(res[2])
+        scores_arr = np.nan_to_num(scores_arr, nan=np.inf)
+
+        len = beta2_arr.shape[0] // 3
+
+        linestyle = '-' if 'FOSI' in optimizer else '--'
+        linewidth = 0.7*scaling_factor if 'FOSI' in optimizer else 1.2*scaling_factor
+
+        for idx, beta2 in enumerate(beta2_vals):
+            axs[idx].plot(beta1_arr[idx*len:(idx+1)*len], scores_arr[idx*len:(idx+1)*len], label=optimizer, color=optimizers_colors[optimizer], linestyle=linestyle, linewidth=linewidth)
+            print(optimizer, "beta2:", beta2_arr[idx*len])
+
+    axs[0].set_ylabel(r'$f_{' + str(kappa) + r',' + str(dim_non_diag) + r'}(\theta_{200})$')
+    for idx, beta2 in enumerate(beta2_vals):
+        axs[idx].annotate(r'$\beta_2=$' + str(beta2), xy=(0.8, 0.85), xycoords='axes fraction', xytext=(0, 0), textcoords='offset pixels', horizontalalignment='right', verticalalignment='bottom', fontsize=5.8*scaling_factor)
+
+    for ax in axs:
+        ax.set_yscale('log')
+        #ax.set_ylim(1e-3, 10)
+        ax.set_xlabel(r'$\beta_1$', labelpad=0)
+
+        ax.spines['right'].set_visible(False)
+        ax.spines['top'].set_visible(False)
+        ax.spines['bottom'].set_linewidth(0.5)
+        ax.spines['left'].set_linewidth(0.5)
+        ax.tick_params(width=0.5)
+
+    handles, labels = axs[0].get_legend_handles_labels()
+    fig.legend(handles, labels, framealpha=0, frameon=False, loc="upper center", bbox_to_anchor=(0.5, 1.0), ncol=2, columnspacing=1.5, handletextpad=0.29)
+
+    plt.subplots_adjust(top=0.85, bottom=0.2, left=0.14, right=0.99, wspace=0.2)
+    plt.savefig(output_folder + "quadratic_jax_kappa_zeta_momentum_single_func_adam." + fig_type)
+    plt.close(fig)
+
+    rcParams.update(rcParamsDefault)
+
+
 if __name__ == "__main__":
 
     if len(sys.argv) > 1:
@@ -782,3 +929,6 @@ if __name__ == "__main__":
         plot_quadratic_jax_kappa_zeta_learning_rate(kappa, dim_non_diag)
     plot_quadratic_jax_kappa_zeta_learning_rate_uni()
     plot_quadratic_jax_kappa_zeta_learning_rate_single_func()
+
+    plot_quadratic_jax_kappa_zeta_learning_rate_momentum_single_func_adam('pdf')
+    plot_quadratic_jax_kappa_zeta_learning_rate_momentum_single_func_adam('png')

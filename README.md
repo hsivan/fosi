@@ -233,6 +233,19 @@ L=10 due to runtime overhead.
 | *Fig.5 - Audio classification. K-FAC converges slower than FOSI-HB and <br/>exhibits worse overfitting, while L-BFGS (L=10) does not converge.* |
 
 
+The following figures demonstrate the difference between Adam and FOSI-Adam for different learning rates and momentum
+values b1, and b2 when applied to quadratic function.
+For more details regarding the experiment setting, see Appendix I in the paper.
+
+| ![](./experiments/visualization/figures/quadratic_jax_kappa_zeta_lr_momentum_single_func_adam.png)                                                                                                                                                                                                                  |
+|:--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| *Fig.6 - Learning rate impact. Left: using different learning rates with <br/>fixed momentum values, b1=0.9 and b2=0.999. Right: using different <br/>learning rates and for each learning rate using the best b1 in [0.7, 1) <br/>and fixed b2=0.999. FOSI-Adam improves the baseline's convergence <br/>in each case.* |
+
+| ![](./experiments/visualization/figures/quadratic_jax_kappa_zeta_momentum_single_func_adam.png)                                                                                                 |
+|:------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| *Fig.7 - Using different b1 values for three different b2 values and <br/>fixed learning rate 0.05. In most cases, FOSI-Adam either improves <br/>or does not harm the baseline’s convergence.* |
+
+
 ## Citing FOSI
 
 If FOSI has been useful for your research, and you would like to cite it in an academic
