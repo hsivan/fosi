@@ -8,98 +8,20 @@ import os
 os.environ['JAX_DEFAULT_DTYPE_BITS'] = '32'
 
 import csv
-from typing import Any, NamedTuple, Iterator, Mapping
 from timeit import default_timer as timer
 
-import tensorflow as tf
 import tensorflow_datasets as tfds
 import numpy as np
-import optax
 import haiku as hk
 import jax
-from jax import lax
 import jax.numpy as jnp
 import kfac_jax
 import jaxopt
 
-from experiments.dnn.dnn_test_utils import get_config, start_test, write_config_to_file, get_optimizer
-
-tf.config.experimental.set_visible_devices([], "GPU")
-print("Device:", jax.devices()[0])
-
-TRAIN_BATCH_SIZE = 32
-EVAL_BATCH_SIZE = 1000
-SEQUENCE_LENGTH = 128
-HIDDEN_SIZE = 256
-SAMPLE_LENGTH = 128
-LEARNING_RATE = 1e-3
-TRAINING_STEPS = 10000
-EVALUATION_INTERVAL = 100
-SAMPLING_INTERVAL = 100
-SEED = 42
-
-
-class TinyShakespeareDataset:
-    Batch = Mapping[str, np.ndarray]
-    NUM_CHARS = 128
-
-    @staticmethod
-    def load(
-            split: tfds.Split,
-            *,
-            batch_size: int,
-            sequence_length: int,
-    ) -> Iterator[Batch]:
-        """ Creates the Tiny Shakespeare dataset as a character modelling task. """
-
-        def preprocess_fn(x: Mapping[str, tf.Tensor]) -> Mapping[str, tf.Tensor]:
-            x = x['text']
-            x = tf.strings.unicode_split(x, 'UTF-8')
-            x = tf.squeeze(tf.io.decode_raw(x, tf.uint8), axis=-1)
-            x = tf.cast(x, tf.int32)
-            return {'input': x[:-1], 'target': x[1:]}
-
-        ds = tfds.load(name='tiny_shakespeare', split=split)
-        ds = ds.map(preprocess_fn)
-        ds = ds.unbatch()
-        ds = ds.batch(sequence_length, drop_remainder=True)
-        ds = ds.shuffle(100)
-        ds = ds.repeat()
-        ds = ds.batch(batch_size)
-        ds = ds.map(lambda b: tf.nest.map_structure(tf.transpose, b))  # Time major.
-
-        return iter(tfds.as_numpy(ds))
-
-    @staticmethod
-    def decode(x: np.ndarray) -> str:
-        return ''.join([chr(x) for x in x])
-
-    @staticmethod
-    def encode(x: str) -> np.ndarray:
-        return np.array([ord(s) for s in x])
-
-
-class LoopValues(NamedTuple):
-    tokens: jnp.ndarray
-    state: Any
-    rng_key: jnp.ndarray
-
-
-class TrainingState(NamedTuple):
-    params: hk.Params
-    opt_state: optax.OptState
-
-
-def make_network() -> hk.RNNCore:
-    """Defines the network architecture."""
-    model = hk.DeepRNN([
-        lambda x: jax.nn.one_hot(x, num_classes=TinyShakespeareDataset.NUM_CHARS),
-        hk.LSTM(HIDDEN_SIZE),
-        jax.nn.relu,
-        hk.LSTM(HIDDEN_SIZE),
-        hk.nets.MLP([HIDDEN_SIZE, TinyShakespeareDataset.NUM_CHARS]),
-    ])
-    return model
+from experiments.dnn.dnn_test_utils import get_config, start_test, write_config_to_file
+from experiments.dnn.rnn_shakespeare import sample, TinyShakespeareDataset, make_network, TRAIN_BATCH_SIZE, \
+    SEQUENCE_LENGTH, EVAL_BATCH_SIZE, SEED, TRAINING_STEPS, TrainingState, SAMPLING_INTERVAL, SAMPLE_LENGTH, \
+    EVALUATION_INTERVAL
 
 
 def sequence_loss(batch: TinyShakespeareDataset.Batch) -> jnp.ndarray:
@@ -113,35 +35,6 @@ def sequence_loss(batch: TinyShakespeareDataset.Batch) -> jnp.ndarray:
     kfac_jax.register_softmax_cross_entropy_loss(logits, one_hot_labels)
     log_probs = jax.nn.log_softmax(logits)
     return -jnp.sum(one_hot_labels * log_probs) / (sequence_length * batch_size)
-
-
-def sample(
-        rng_key: jnp.ndarray,
-        context: jnp.ndarray,
-        sample_length: int,
-) -> jnp.ndarray:
-    """Draws samples from the model, given an initial context."""
-    # Note: this function is impure; we hk.transform() it below.
-    assert context.ndim == 1  # No batching for now.
-    core = make_network()
-
-    def body_fn(t: int, v: LoopValues) -> LoopValues:
-        token = v.tokens[t]
-        next_logits, next_state = core(token, v.state)
-        key, subkey = jax.random.split(v.rng_key)
-        next_token = jax.random.categorical(subkey, next_logits, axis=-1)
-        new_tokens = v.tokens.at[t + 1].set(next_token)
-        return LoopValues(tokens=new_tokens, state=next_state, rng_key=key)
-
-    logits, state = hk.dynamic_unroll(core, context, core.initial_state(None))
-    key, subkey = jax.random.split(rng_key)
-    first_token = jax.random.categorical(subkey, logits[-1])
-    tokens = jnp.zeros(sample_length, dtype=np.int32)
-    tokens = tokens.at[0].set(first_token)
-    initial_values = LoopValues(tokens=tokens, state=state, rng_key=key)
-    values: LoopValues = lax.fori_loop(0, sample_length, body_fn, initial_values)
-
-    return values.tokens
 
 
 def main(optimizer_name, learning_rate, momentum):

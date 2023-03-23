@@ -74,7 +74,7 @@ def load_datasets():
     train_dataset = train_ds.batch(Config["BATCH_SIZE"], drop_remainder=True).prefetch(tf.data.AUTOTUNE)
     test_dataset = test_ds.batch(Config["BATCH_SIZE"]).prefetch(tf.data.AUTOTUNE)
 
-    return train_dataset, test_dataset
+    return tfds.as_numpy(train_dataset), tfds.as_numpy(test_dataset)
 
 
 class Head(nn.Module):
@@ -188,7 +188,7 @@ def loss_fn(params, batch, batch_stats):
     inputs, targets = batch
     # Fix backbone with the backbone in variables['params']['backbone'] and use the given batch_stats (which is getting updated).
     # Only the head (params) is trained (only gradient w.r.t params are evaluated).
-    variables_ = {'params': {'backbone': variables['params']['backbone'], 'head': params['head']}, 'batch_stats': batch_stats}
+    variables_ = {'params': {'backbone': variables['params']['backbone'], 'head': params}, 'batch_stats': batch_stats}
 
     # return mutated states if mutable is specified
     logits, new_batch_stats = model.apply(variables_, inputs, mutable=['batch_stats'])
@@ -220,8 +220,8 @@ def train_step(state: TrainState, batch):
 @jit
 def val_step(params, batch_stats, batch):
     inputs, targets = batch
-    variables = {'params': params, 'batch_stats': batch_stats}
-    logits = model.apply(variables, inputs)  # stack the model's forward pass with the logits function
+    variables_ = {'params': {'backbone': variables['params']['backbone'], 'head': params}, 'batch_stats': batch_stats}
+    logits = model.apply(variables_, inputs)  # stack the model's forward pass with the logits function
     return accuracy(logits, targets), optax.softmax_cross_entropy(logits, jax.nn.one_hot(targets, Config["NUM_LABELS"])).mean()
 
 
@@ -243,7 +243,6 @@ def train_transfer_learning(optimizer_name):
         writer.writerow(["epoch", "train_loss", "train_acc", "val_loss", "val_acc", "latency", "wall_time"])
 
     batch = next(iter(train_dataset))
-    batch = (jnp.array(batch[0], dtype=jnp.float32), jnp.array(batch[1], dtype=jnp.float32))
 
     print("Number of frozen parameters:", ravel_pytree(variables['params']['backbone'])[0].shape[0])
 
@@ -253,7 +252,7 @@ def train_transfer_learning(optimizer_name):
     # Instantiate a TrainState
     state = TrainState.create(
         apply_fn=model.apply,
-        params=variables['params'],
+        params=variables['params']['head'],
         tx=optimizer,
         batch_stats=variables['batch_stats']
     )
@@ -272,11 +271,8 @@ def train_transfer_learning(optimizer_name):
                 if epoch_i == 0 and batch_i == 1:
                     start_time = timer()
 
-                # batch is a tuple containing (image, labels)
-                batch_ = (jnp.array(batch[0], dtype=jnp.float32), jnp.array(batch[1], dtype=jnp.float32))
-
                 # backprop and update param & batch stats
-                state, train_metadata = train_step(state, batch_)
+                state, train_metadata = train_step(state, batch)
 
                 # update train statistics
                 train_loss.append(train_metadata['loss'])
@@ -295,9 +291,7 @@ def train_transfer_learning(optimizer_name):
         iter_n = len(test_dataset)
         with tqdm(total=iter_n, desc=f"{iter_n} iterations", leave=False) as progress_bar:
             for batch in test_dataset:
-                batch_ = (jnp.array(batch[0], dtype=jnp.float32), jnp.array(batch[1], dtype=jnp.float32))
-
-                acc, loss = val_step(state.params, state.batch_stats, batch_)
+                acc, loss = val_step(state.params, state.batch_stats, batch)
                 valid_accuracy.append(acc)
                 valid_loss.append(loss)
                 progress_bar.update(1)

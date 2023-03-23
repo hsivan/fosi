@@ -24,8 +24,7 @@ from experiments.dnn.transfer_learning_cifar10 import get_model_and_variables, C
 
 
 def loss_fn(params, batch_stats, batch):
-    variables_ = {'params': {'backbone': variables['params']['backbone'], 'head': params['head']},
-                  'batch_stats': batch_stats}
+    variables_ = {'params': {'backbone': variables['params']['backbone'], 'head': params}, 'batch_stats': batch_stats}
     inputs, targets = batch
     logits, new_batch_stats = model.apply(variables_, inputs, mutable=['batch_stats'])
     # logits: (BS, OUTPUT_N), one_hot: (BS, OUTPUT_N)
@@ -53,7 +52,6 @@ def train_transfer_learning(optimizer_name, learning_rate, momentum):
         writer.writerow(["epoch", "train_loss", "train_acc", "val_loss", "val_acc", "latency", "wall_time"])
 
     batch = next(iter(train_dataset))
-    batch = (jnp.array(batch[0], dtype=jnp.float32), jnp.array(batch[1], dtype=jnp.float32))
 
     print("Number of frozen parameters:", ravel_pytree(variables['params']['backbone'])[0].shape[0])
 
@@ -71,13 +69,13 @@ def train_transfer_learning(optimizer_name, learning_rate, momentum):
         )
         rng = jax.random.PRNGKey(42)
         rng, key = jax.random.split(rng)
-        opt_state = optimizer.init(variables['params'], key, batch, variables['batch_stats'])
+        opt_state = optimizer.init(variables['params']['head'], key, batch, variables['batch_stats'])
     else:  # lbfgs
         # Diverges with history_size=10, therefore use 20
         optimizer = jaxopt.LBFGS(fun=jax.value_and_grad(loss_fn, has_aux=True), value_and_grad=True, has_aux=True, jit=True, stepsize=learning_rate, history_size=momentum)
-        opt_state = optimizer.init_state(variables['params'], variables['batch_stats'], batch)
+        opt_state = optimizer.init_state(variables['params']['head'], variables['batch_stats'], batch)
 
-    params = variables['params']
+    params = variables['params']['head']
     batch_stats = variables['batch_stats']
 
     start_time = 1e10
@@ -94,20 +92,17 @@ def train_transfer_learning(optimizer_name, learning_rate, momentum):
                 if epoch_i == 0 and batch_i == 1:
                     start_time = timer()
 
-                # batch is a tuple containing (image,labels)
-                batch_ = (jnp.array(batch[0], dtype=jnp.float32), jnp.array(batch[1], dtype=jnp.float32))
-
                 # backprop and update param & batch stats
                 if conf["optimizer"] == "kfac":
                     rng, key = jax.random.split(rng)
-                    params, opt_state, batch_stats, stats = optimizer.step(params, opt_state, key, batch=batch_,
+                    params, opt_state, batch_stats, stats = optimizer.step(params, opt_state, key, batch=batch,
                                                                            func_state=batch_stats, global_step_int=epoch_i * iter_n + batch_i,
                                                                            learning_rate=conf["learning_rate"], momentum=conf["momentum"])
                     # update train statistics
                     train_loss.append(stats['loss'])
                     train_accuracy.append(stats["aux"])
                 else:  # lbfgs
-                    net_params, opt_state = jax.jit(optimizer.update)(params, opt_state, batch_stats, batch_)
+                    net_params, opt_state = jax.jit(optimizer.update)(params, opt_state, batch_stats, batch)
                     batch_stats, acc = opt_state.aux
                     train_loss.append(opt_state.value)
                     train_accuracy.append(acc)
@@ -124,9 +119,7 @@ def train_transfer_learning(optimizer_name, learning_rate, momentum):
         iter_n = len(test_dataset)
         with tqdm(total=iter_n, desc=f"{iter_n} iterations", leave=False) as progress_bar:
             for batch in test_dataset:
-                batch_ = (jnp.array(batch[0], dtype=jnp.float32), jnp.array(batch[1], dtype=jnp.float32))
-
-                acc, loss = val_step(params, batch_stats, batch_)
+                acc, loss = val_step(params, batch_stats, batch)
                 valid_accuracy.append(acc)
                 valid_loss.append(loss)
                 progress_bar.update(1)
