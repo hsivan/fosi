@@ -200,7 +200,7 @@ For further information regarding the experiments, please refer to the paper for
 
 #### Notes:
 * The optimal results for K-FAC presented bellow were obtained through a grid search over the learning rate and momentum,
-which considered K-FAC's adaptive options, and using adaptive dumping.
+which considered K-FAC's adaptive options, and using adaptive damping.
 * We repeated the experiments for K-FAC with both the default inverse_update_period (*T3* in the K-FAC paper) value,
 which is 5, and with inverse_update_period=800, which is similar to FOSI's *T* used in the experiments.
 We observed that for the specific model architectures we used, K-FAC's latency is dominated by its overhead per iterations,

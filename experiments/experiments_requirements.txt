@@ -14,7 +14,7 @@ jax[cuda11_cudnn86]==0.4.2
 optax==0.1.4
 functorch==0.2.1
 torchopt==0.5.0.post4
-torch=1.12.1
+torch==1.12.1
 
 # Packages for the experiments
 tensorflow
