@@ -179,6 +179,23 @@ def fosi_momentum(
                 num_iters_to_approx_eigs, approx_k, approx_l, warmup_w, alpha, learning_rate_clip, device)
 
 
+def fosi_nesterov(
+        base_optimizer: GradientTransformation,  # Should be a GradientTransformation instance returned by optax.sgd() with momentum and nesterov
+        loss_fn: Callable,
+        batch: Any,
+        decay: float = 0.9,
+        accumulator_dtype: Optional[Any] = None,
+        num_iters_to_approx_eigs: int = 100,
+        approx_k: int = 5,
+        approx_l: int = 0,
+        warmup_w: Optional[int] = None,
+        alpha: float = 0.1,
+        learning_rate_clip: Optional[float] = 3.0,
+) -> GradientTransformation:
+    return fosi(base_optimizer, lambda g, t: (1 + decay) * g + decay**2 * t, loss_fn, batch, accumulator_dtype,
+                num_iters_to_approx_eigs, approx_k, approx_l, warmup_w, alpha, learning_rate_clip)
+
+
 def fosi_sgd(
         base_optimizer: GradientTransformation,  # Should be a GradientTransformation instance returned by torchopt.sgd() without momentum
         loss_fn: Callable,

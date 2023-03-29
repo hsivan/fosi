@@ -2,7 +2,7 @@ import os
 import datetime
 import optax
 
-from fosi import fosi_momentum, fosi_adam
+from fosi import fosi_momentum, fosi_adam, fosi_nesterov, fosi_sgd
 
 
 def _prepare_test_folder(test_name, test_folder=""):
@@ -38,7 +38,7 @@ def get_config(optimizer='adam', learning_rate=1e-3, num_epochs=100, batch_size=
         else:
             learning_rate_clip = 3.0  # Use 3.0 as the default value
 
-    conf["optimizer"] = optimizer  # Base optimizer. Could be 'sgd' / 'momentum' / 'adam' / 'fosi_sgd' / 'fosi_momentum' / 'fosi_adam'
+    conf["optimizer"] = optimizer  # Base optimizer. Could be 'sgd' / 'momentum' / 'adam' / 'nesterov' / 'fosi_sgd' / 'fosi_momentum' / 'fosi_adam' / 'fosi_nesterov
     conf["learning_rate"] = learning_rate  # Learning rate of the base optimizer
     conf["num_epochs"] = num_epochs
     conf["batch_size"] = batch_size
@@ -65,12 +65,29 @@ def write_config_to_file(test_folder, conf):
 
 
 def get_optimizer(conf, loss_fn, batch):
-    if conf["optimizer"] == 'momentum':
+    if conf["optimizer"] == 'sgd':
+        optimizer = optax.sgd(conf["learning_rate"])
+    elif conf["optimizer"] == 'momentum':
         optimizer = optax.sgd(conf["learning_rate"], momentum=conf["momentum"], nesterov=False)
+    elif conf["optimizer"] == 'nesterov':
+        optimizer = optax.sgd(conf["learning_rate"], momentum=conf["momentum"], nesterov=True)
     elif conf["optimizer"] == 'adam':
         optimizer = optax.adam(conf["learning_rate"])
+    elif conf["optimizer"] == 'fosi_sgd':
+        optimizer = fosi_sgd(optax.sgd(conf["learning_rate"]), loss_fn, batch,
+                             num_iters_to_approx_eigs=conf["num_iterations_between_ese"],
+                             approx_k=conf["approx_k"], approx_l=conf["approx_l"],
+                             warmup_w=conf["num_warmup_iterations"], alpha=conf["alpha"],
+                             learning_rate_clip=conf["learning_rate_clip"])
     elif conf["optimizer"] == 'fosi_momentum':
         optimizer = fosi_momentum(optax.sgd(conf["learning_rate"], momentum=conf["momentum"], nesterov=False), loss_fn,
+                                  batch, decay=conf["momentum"],
+                                  num_iters_to_approx_eigs=conf["num_iterations_between_ese"],
+                                  approx_k=conf["approx_k"], approx_l=conf["approx_l"],
+                                  warmup_w=conf["num_warmup_iterations"], alpha=conf["alpha"],
+                                  learning_rate_clip=conf["learning_rate_clip"])
+    elif conf["optimizer"] == 'fosi_nesterov':
+        optimizer = fosi_nesterov(optax.sgd(conf["learning_rate"], momentum=conf["momentum"], nesterov=True), loss_fn,
                                   batch, decay=conf["momentum"],
                                   num_iters_to_approx_eigs=conf["num_iterations_between_ese"],
                                   approx_k=conf["approx_k"], approx_l=conf["approx_l"],
