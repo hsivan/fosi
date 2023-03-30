@@ -154,7 +154,7 @@ def train_mnist(optimizer_name):
 
     train_data_gen = data_generator(x_train_normalized, y_train_ohe, batch_size=conf["batch_size"], is_valid=True)
 
-    optimizer = get_optimizer(conf, loss_fn, list(train_data_gen)[0])
+    optimizer = get_optimizer(conf, loss_fn, list(train_data_gen)[0], b_call_ese_internally=False)
     opt_state = optimizer.init(net_params)
 
     ###############################    Training    ###############################
@@ -182,6 +182,10 @@ def train_mnist(optimizer_name):
         for step in range(num_train_batches):
             iteration_start = timer()
             batch_data = next(train_data_gen)
+
+            if "fosi" in optimizer_name and max(1, (i * num_train_batches + step) + 1 - conf["num_warmup_iterations"]) % conf["num_iterations_between_ese"] == 0:
+                opt_state = optimizer.update_ese(net_params, opt_state)
+
             loss_value, acc, opt_state, net_params = train_step(opt_state, net_params, batch_data)
             iteration_end = timer()
 

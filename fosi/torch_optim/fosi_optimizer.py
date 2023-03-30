@@ -41,20 +41,17 @@ def scale_by_fosi(
     warmup_w = warmup_w if warmup_w is not None else num_iters_to_approx_eigs
     ese_fn = get_ese_fn(loss_fn, approx_k, batch, approx_l, device=device)
 
-    def _approx_learning_rates_and_eigenvectors(params):
+    def _approx_learning_rates_and_eigenvectors(params, state):
         k_eigenvals, k_eigenvecs = ese_fn(params)
         k_learning_rates = torch.abs(1.0 / k_eigenvals)
         # Scaling factor for base_opt_deltas, which is clipped k_learning_rates[approx_l] / k_learning_rates[-1]
         scaling_factor = torch.clip(k_learning_rates[approx_l] / k_learning_rates[-1], 1.0, learning_rate_clip)
-        return k_learning_rates, k_eigenvecs, scaling_factor
+        state = ScaleByFosiState(base_opt_state=state.base_opt_state, velocity=state.velocity, count=state.count,
+                                 k_learning_rates=k_learning_rates, k_eigenvecs=k_eigenvecs, scaling_factor=scaling_factor)
+        return state
 
-    def _appprox_newton_direction(g1, state, params):
+    def _appprox_newton_direction(g1, k_eigenvecs, k_learning_rates):
         flatten_grad = ravel(g1)
-
-        if (state.count + 1 >= warmup_w) & ((state.count + 1 - warmup_w) % num_iters_to_approx_eigs == 0):
-            k_learning_rates, k_eigenvecs, scaling_factor = _approx_learning_rates_and_eigenvectors(params)
-        else:
-            k_learning_rates, k_eigenvecs, scaling_factor = state.k_learning_rates, state.k_eigenvecs, state.scaling_factor
 
         # Compute coeffs (size of the gradient projection on the k leading eigenvectors)
         coeffs = k_eigenvecs @ flatten_grad
@@ -64,7 +61,7 @@ def scale_by_fosi(
         newton_direction = torch.matmul(k_learning_rates * coeffs, k_eigenvecs)
         newton_direction = unravel(newton_direction, g1, device)
 
-        return newton_direction, k_learning_rates, k_eigenvecs, scaling_factor
+        return newton_direction
 
     def _orthogonalize_vector_wrt_eigenvectors(v, k_eigenvecs):
         v_ = torch.unsqueeze(ravel(v), -1)
@@ -93,28 +90,31 @@ def scale_by_fosi(
                                 k_learning_rates=k_learning_rates, k_eigenvecs=k_eigenvecs, scaling_factor=scaling_factor)
 
     def update_fn(updates, state, params):
+        if (state.count + 1 >= warmup_w) & ((state.count + 1 - warmup_w) % num_iters_to_approx_eigs == 0):
+            state = _approx_learning_rates_and_eigenvectors(params, state)
+
         g1, g2 = _get_g1_and_g2(updates, state.k_eigenvecs)
 
         new_velocity = tree_map(momentum_func, device, g1, state.velocity)
         # Cast the tree to accumulator_dtype
         new_velocity = new_velocity if accumulator_dtype is None else tree_map(lambda t: t.astype(accumulator_dtype), device, new_velocity)
 
-        newton_direction, k_learning_rates, k_eigenvecs, scaling_factor = _appprox_newton_direction(new_velocity, state, params)
+        newton_direction = _appprox_newton_direction(new_velocity, state.k_eigenvecs, state.k_learning_rates)
 
         base_opt_deltas, new_base_opt_state = base_optimizer.update(g2, state.base_opt_state)
 
         # Reduce from base_opt_deltas its projection on k_eigenvecs, which makes base_opt_deltas orthogonal to
         # k_eigenvecs as well as to newton_direction (which is a linear combination of k_eigenvecs).
-        base_opt_deltas = _orthogonalize_vector_wrt_eigenvectors(base_opt_deltas, k_eigenvecs)
+        base_opt_deltas = _orthogonalize_vector_wrt_eigenvectors(base_opt_deltas, state.k_eigenvecs)
 
         # Scale base_opt_deltas by a clipped factor k_learning_rates[approx_l] / k_learning_rates[-1]
-        base_opt_deltas = tree_map(lambda x: x * scaling_factor, device, base_opt_deltas)
+        base_opt_deltas = tree_map(lambda x: x * state.scaling_factor, device, base_opt_deltas)
 
         # base_opt_deltas already negated, therefore in the update it appears without the minus sign
         updates = tree_map(lambda x, y: x - alpha * y, device, base_opt_deltas, newton_direction)
         count_inc = state.count + 1
         return updates, ScaleByFosiState(base_opt_state=new_base_opt_state, velocity=new_velocity, count=count_inc,
-                                         k_learning_rates=k_learning_rates, k_eigenvecs=k_eigenvecs, scaling_factor=scaling_factor)
+                                         k_learning_rates=state.k_learning_rates, k_eigenvecs=state.k_eigenvecs, scaling_factor=state.scaling_factor)
 
     return GradientTransformation(init_fn, update_fn)
 

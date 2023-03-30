@@ -32,6 +32,7 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
 tf.config.experimental.set_visible_devices([], "GPU")
+print(jax.local_devices())
 
 
 Config = {
@@ -247,7 +248,7 @@ def train_transfer_learning(optimizer_name):
     print("Number of frozen parameters:", ravel_pytree(variables['params']['backbone'])[0].shape[0])
 
     loss_f = lambda params, batch: loss_fn(params, batch, variables['batch_stats'])[0]
-    optimizer = get_optimizer(conf, loss_f, batch)
+    optimizer = get_optimizer(conf, loss_f, batch, b_call_ese_internally=False)
 
     # Instantiate a TrainState
     state = TrainState.create(
@@ -270,6 +271,9 @@ def train_transfer_learning(optimizer_name):
             for batch_i, batch in enumerate(train_dataset):
                 if epoch_i == 0 and batch_i == 1:
                     start_time = timer()
+
+                if "fosi" in optimizer_name and max(1, (epoch_i * iter_n + batch_i) + 1 - conf["num_warmup_iterations"]) % conf["num_iterations_between_ese"] == 0:
+                    state = state.replace(opt_state=optimizer.update_ese(state.params, state.opt_state))
 
                 # backprop and update param & batch stats
                 state, train_metadata = train_step(state, batch)

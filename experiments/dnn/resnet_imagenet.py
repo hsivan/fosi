@@ -302,6 +302,10 @@ def train_and_evaluate(config: ml_collections.ConfigDict, conf, test_folder, wor
     start_time = epoch_start = 1e10
     for step in range(step_offset, num_steps):
         batch = next(train_iter)
+
+        if "fosi" in conf["optimizer"] and max(1, step + 1 - conf["num_warmup_iterations"]) % conf["num_iterations_between_ese"] == 0:
+            state = state.replace(opt_state=state.tx.update_ese(state.params, state.opt_state))
+
         state, metrics = p_train_step(state, batch)
         if step == step_offset:
             print('Initial compilation completed.')
