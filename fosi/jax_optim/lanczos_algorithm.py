@@ -1,13 +1,12 @@
 import jax.numpy as np
 import jax.random as random
-from jax import jit
 import jax
 from jax.flatten_util import ravel_pytree
 from jax import jvp, grad
 from jax.config import config
 
 
-def lanczos_alg(order, loss, rng_key, k_largest, l_smallest=0, return_precision='32'):
+def lanczos_alg(order, loss, rng_key, k_largest, l_smallest=0, return_precision='32', b_parallel=False):
     """
     Lanczos algorithm for tridiagonalizing a real symmetric matrix, using full reorthogonalization.
     This function returns a function that performs the Lanczos iterations and can be jitted.
@@ -19,6 +18,8 @@ def lanczos_alg(order, loss, rng_key, k_largest, l_smallest=0, return_precision=
         l_smallest: an integer corresponding to the required number of the smallest eigenvalues and eigenvectors.
         return_precision: the algorithm must run in high precision; however, after extracting the eigenvalues and
             eigenvectors we can cast it back to 32/64 bit according to the precision required in return_precision.
+        b_parallel: if set to True it means lanczos_alg_jitted is called from within pmap and the batch
+            for the hvp is split to multiple devices; therefore, the gradients should be accumulated.
     Returns:
         lanczos_alg_jitted: a function that performs the Lanczos algorith and can be jitted.
     """
@@ -60,7 +61,13 @@ def lanczos_alg(order, loss, rng_key, k_largest, l_smallest=0, return_precision=
         # We assume here that the default precision is 32 bit.
         v_flat = unravel(v) if return_precision == '64' else unravel(v.astype(np.float32))  # convert v to the param tree structure
         loss_fn = lambda x: loss(x, batch)
-        hessian_vp = jvp(grad(loss_fn), [params], [v_flat])[1]
+        if b_parallel:
+            # Re-use same axis_name as in the call to `pmap(...lanczos_alg_jitted...)`.
+            # Note: only support loss functions with mean aggregation. For sum aggregation use psum instead of pmean.
+            grad_fn = lambda x: jax.lax.pmean(grad(loss_fn)(x), axis_name='batch')
+        else:
+            grad_fn = grad(loss_fn)
+        hessian_vp = jvp(grad_fn, [params], [v_flat])[1]
         w, _ = ravel_pytree(hessian_vp)
         w = w.astype(np.float64)
 
@@ -76,7 +83,7 @@ def lanczos_alg(order, loss, rng_key, k_largest, l_smallest=0, return_precision=
 
         return (vecs, tridiag)
 
-    @jit
+    @jax.jit
     def lanczos_alg_jitted(params, batch):
         """
         Lanczos algorithm for tridiagonalizing a real symmetric matrix, using full reorthogonalization.

@@ -4,6 +4,9 @@ import os
 # See: https://github.com/google/jax/issues/8178
 os.environ['JAX_DEFAULT_DTYPE_BITS'] = '32'
 
+# Use 2 devices
+os.environ['CUDA_VISIBLE_DEVICES'] = '0,1'
+
 import jax.numpy as np
 import jax.random as random
 from jax.example_libraries.stax import Dense, LogSoftmax, Tanh
@@ -19,7 +22,9 @@ import matplotlib.pyplot as plt
 from lanczos_algorithm import lanczos_alg
 
 
-def lanczos_algorithm_test():
+def lanczos_algorithm_test(b_parallel=False):
+    local_device_count = jax.local_device_count()
+    print("local_device_count:", local_device_count)
 
     def get_batch(input_size, output_size, batch_size, key):
         key, split = random.split(key)
@@ -27,7 +32,7 @@ def lanczos_algorithm_test():
         key, split = random.split(key)
         ys = random.randint(split, minval=0, maxval=output_size, shape=(batch_size,))
         ys = np.eye(output_size)[ys]
-        return (xs, ys), key
+        return np.array([xs, ys]), key
 
     def prepare_single_layer_model(input_size, output_size, width, key):
         init_random_params, predict = stax.serial(Dense(width), Tanh, Dense(output_size), LogSoftmax)
@@ -36,7 +41,7 @@ def lanczos_algorithm_test():
         return predict, params, key
 
     def loss(y, y_hat):
-        return -np.sum(y * y_hat)
+        return -np.mean(y * y_hat)
 
     def full_hessian(loss, params):
         flat_params, unravel = ravel_pytree(params)
@@ -55,7 +60,7 @@ def lanczos_algorithm_test():
     input_size = 10
     output_size = 10
     width = 100
-    batch_size = 5
+    batch_size = 8
     atol_e = 1e-4
 
     predict, params, key = prepare_single_layer_model(input_size, output_size, width, key)
@@ -68,17 +73,28 @@ def lanczos_algorithm_test():
     largest_k = 10
     smallest_k = 3
     lanczos_order = 100
-    hvp_cl = lanczos_alg(lanczos_order, loss_fn, key, lanczos_order)  # Return all lanczos_order eigen products
+    hvp_cl = lanczos_alg(lanczos_order, loss_fn, key, lanczos_order, b_parallel=b_parallel)  # Return all lanczos_order eigen products
+    if b_parallel:
+        hvp_cl = jax.pmap(hvp_cl, axis_name='batch')
 
     # compute the full hessian
     loss_cl = functools.partial(loss_fn, batch=b)
     hessian = full_hessian(loss_cl, params)
     eigs_true, eigvecs_true = np.linalg.eigh(hessian)
 
+    if b_parallel:
+        # Replicate params
+        params = jax.tree_map(lambda x: np.array([x] * local_device_count), params)
+        # reshape (2 for xs and ys, host_batch_size, input_size) to (local_device_count, 2, device_batch_size, input_size)
+        b = np.array(np.split(b, local_device_count, axis=1))
+
     for i in range(10):
         start_iteration = timer()
         print("About to run lanczos for", num_params, "parameters")
         eigs_lanczos, eigvecs_lanczos, _, _ = hvp_cl(params, b)
+        if b_parallel:
+            # Get values from the first replica
+            eigs_lanczos, eigvecs_lanczos = eigs_lanczos[0], eigvecs_lanczos[0]
 
         if i == 0:
             assert np.allclose(eigs_true[-largest_k:], eigs_lanczos[-largest_k:], atol=atol_e), print("i:", i, "eigs_true:", eigs_true[-largest_k:], "eigs_lanczos:", eigs_lanczos[-largest_k:])
@@ -167,5 +183,6 @@ def lanczos_eigen_approx_test():
 
 
 if __name__ == '__main__':
-    lanczos_algorithm_test()
+    lanczos_algorithm_test(b_parallel=False)
+    lanczos_algorithm_test(b_parallel=True)
     lanczos_eigen_approx_test()

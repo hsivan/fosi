@@ -15,7 +15,8 @@ class UpdateEseFn(typing_extensions.Protocol):
     def __call__(
             self,
             state: OptState,
-            params: Params = None
+            params: Params = None,
+            batch: Any = None
     ) -> OptState:
         """The `update` function of the extreme spectrum estimation (extreme eigenvalues and eigenvectors of the Hessian).
         Args:
@@ -71,14 +72,17 @@ def scale_by_fosi(
         alpha: ScalarOrSchedule = 0.1,
         learning_rate_clip: Optional[float] = 3.0,
         b_call_ese_internally: bool = True,
+        b_parallel: bool = False,
 ) -> GradientTransformationFosi:
     accumulator_dtype = None if accumulator_dtype is None else jax.dtypes.canonicalize_dtype(accumulator_dtype)
     warmup_w = warmup_w if warmup_w is not None else num_iters_to_approx_eigs
-    ese_fn = get_ese_fn(loss_fn, approx_k, batch, approx_l)
+    if b_parallel and b_call_ese_internally:
+        raise Exception("b_parallel=True and b_call_ese_internally=True is not supported.")
+    ese_fn = get_ese_fn(loss_fn, approx_k, None, approx_l, b_parallel=b_parallel)
 
     @jax.jit
-    def _approx_learning_rates_and_eigenvectors(params, state):
-        k_eigenvals, k_eigenvecs = ese_fn(params)
+    def _approx_learning_rates_and_eigenvectors(params, state, e_batch):
+        k_eigenvals, k_eigenvecs = ese_fn(params, e_batch)
         k_learning_rates = jnp.abs(1.0 / k_eigenvals)
         # k_learning_rates = jnp.where(jnp.abs(k_eigenvals) < 1.0, jnp.sqrt(jnp.abs(k_eigenvals)), jnp.abs(k_eigenvals))
         # Scaling factor for base_opt_deltas, which is clipped k_learning_rates[approx_l] / k_learning_rates[-1]
@@ -87,10 +91,15 @@ def scale_by_fosi(
                                  k_learning_rates=k_learning_rates, k_eigenvecs=k_eigenvecs, scaling_factor=scaling_factor)
         return state
 
-    def approx_learning_rates_and_eigenvectors(params, state):
+    def approx_learning_rates_and_eigenvectors(params, state, e_batch=None):
         if b_call_ese_internally:
             raise Exception("External call to update_ese() method while FOSI optimizer was initializes with b_call_ese_internally=True.")
-        return _approx_learning_rates_and_eigenvectors(params, state)
+
+        if b_parallel:
+            # Batch should be passed to this function only is using parallel training, since pmap is done on 'batch'
+            return _approx_learning_rates_and_eigenvectors(params, state, e_batch)
+        else:
+            return _approx_learning_rates_and_eigenvectors(params, state, batch)
 
     def _appprox_newton_direction(g1, k_eigenvecs, k_learning_rates):
         flatten_grad, unravel = ravel_pytree(g1)
@@ -135,7 +144,12 @@ def scale_by_fosi(
         # on the first call to update_fn as part of the jax.lax.cond compilation of both branches.
         if not b_call_ese_internally:
             # Just produce compilation, without using the results
-            _approx_learning_rates_and_eigenvectors(params, state)
+            if b_parallel:
+                # Usually, at this point batch is already replicated, but not params
+                jax.pmap(_approx_learning_rates_and_eigenvectors, axis_name='batch')(jax.device_put_replicated(params, jax.local_devices()),
+                                                                                     jax.device_put_replicated(state, jax.local_devices()), batch)
+            else:
+                _approx_learning_rates_and_eigenvectors(params, state, batch)
         return state
 
     def update_fn(updates, state, params):
@@ -151,7 +165,7 @@ def scale_by_fosi(
         if b_call_ese_internally:
             state = jax.lax.cond(
                 (state.count + 1 >= warmup_w) & (jnp.mod((state.count + 1 - warmup_w), num_iters_to_approx_eigs) == 0),
-                _approx_learning_rates_and_eigenvectors,
+                lambda x, y: _approx_learning_rates_and_eigenvectors(x, y, batch),
                 lambda x, y: y, params, state)
 
         g1, g2 = _get_g1_and_g2(updates, state.k_eigenvecs)
@@ -199,11 +213,13 @@ def fosi(
         alpha: ScalarOrSchedule = 0.1,
         learning_rate_clip: Optional[float] = 3.0,
         b_call_ese_internally: bool = True,
+        b_parallel: bool = False,
 ) -> GradientTransformationFosi:
     return scale_by_fosi(base_optimizer=base_optimizer, momentum_func=momentum_func, loss_fn=loss_fn, batch=batch,
                          accumulator_dtype=accumulator_dtype, num_iters_to_approx_eigs=num_iters_to_approx_eigs,
                          approx_k=approx_k, approx_l=approx_l, warmup_w=warmup_w, alpha=alpha,
-                         learning_rate_clip=learning_rate_clip, b_call_ese_internally=b_call_ese_internally)
+                         learning_rate_clip=learning_rate_clip, b_call_ese_internally=b_call_ese_internally,
+                         b_parallel=b_parallel)
 
 
 def fosi_adam(
@@ -218,10 +234,11 @@ def fosi_adam(
         warmup_w: Optional[int] = None,
         alpha: ScalarOrSchedule = 0.1,
         b_call_ese_internally: bool = True,
+        b_parallel: bool = False,
 ) -> GradientTransformationFosi:
     # Note: Adam should use learning_rate_clip = 1.0
     return fosi(base_optimizer, lambda g, t: (1 - decay) * g + decay * t, loss_fn, batch, accumulator_dtype,
-                num_iters_to_approx_eigs, approx_k, approx_l, warmup_w, alpha, 1.0, b_call_ese_internally)
+                num_iters_to_approx_eigs, approx_k, approx_l, warmup_w, alpha, 1.0, b_call_ese_internally, b_parallel)
 
 
 def fosi_momentum(
@@ -237,9 +254,10 @@ def fosi_momentum(
         alpha: ScalarOrSchedule = 0.1,
         learning_rate_clip: Optional[float] = 3.0,
         b_call_ese_internally: bool = True,
+        b_parallel: bool = False,
 ) -> GradientTransformationFosi:
-    return fosi(base_optimizer, lambda g, t: g + decay * t, loss_fn, batch, accumulator_dtype,
-                num_iters_to_approx_eigs, approx_k, approx_l, warmup_w, alpha, learning_rate_clip, b_call_ese_internally)
+    return fosi(base_optimizer, lambda g, t: g + decay * t, loss_fn, batch, accumulator_dtype, num_iters_to_approx_eigs,
+                approx_k, approx_l, warmup_w, alpha, learning_rate_clip, b_call_ese_internally, b_parallel)
 
 
 def fosi_nesterov(
@@ -255,9 +273,10 @@ def fosi_nesterov(
         alpha: ScalarOrSchedule = 0.1,
         learning_rate_clip: Optional[float] = 3.0,
         b_call_ese_internally: bool = True,
+        b_parallel: bool = False,
 ) -> GradientTransformationFosi:
-    return fosi(base_optimizer, lambda g, t: (1 + decay) * g + decay**2 * t, loss_fn, batch, accumulator_dtype,
-                num_iters_to_approx_eigs, approx_k, approx_l, warmup_w, alpha, learning_rate_clip, b_call_ese_internally)
+    return fosi(base_optimizer, lambda g, t: (1 + decay) * g + decay**2 * t, loss_fn, batch, accumulator_dtype, num_iters_to_approx_eigs,
+                approx_k, approx_l, warmup_w, alpha, learning_rate_clip, b_call_ese_internally, b_parallel)
 
 
 def fosi_sgd(
@@ -272,6 +291,7 @@ def fosi_sgd(
         alpha: ScalarOrSchedule = 0.1,
         learning_rate_clip: Optional[float] = 3.0,
         b_call_ese_internally: bool = True,
+        b_parallel: bool = False,
 ) -> GradientTransformationFosi:
-    return fosi(base_optimizer, lambda g, t: g, loss_fn, batch, accumulator_dtype,
-                num_iters_to_approx_eigs, approx_k, approx_l, warmup_w, alpha, learning_rate_clip, b_call_ese_internally)
+    return fosi(base_optimizer, lambda g, t: g, loss_fn, batch, accumulator_dtype, num_iters_to_approx_eigs,
+                approx_k, approx_l, warmup_w, alpha, learning_rate_clip, b_call_ese_internally, b_parallel)

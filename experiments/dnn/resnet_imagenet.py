@@ -1,11 +1,19 @@
 """Trains a ResNet-50 on the ImageNet dataset.
 Based on: https://github.com/google/flax/blob/b60f7f45b90f8fc42a88b1639c9cc88a40b298d3/examples/imagenet/train.py
 """
+
+import os
+# Note: To maintain the default precision as 32-bit and not switch to 64-bit, set the following flag prior to any
+# imports of JAX. This is necessary as the jax_enable_x64 flag is later set to True inside the Lanczos algorithm.
+# See: https://github.com/google/jax/issues/8178
+os.environ['JAX_DEFAULT_DTYPE_BITS'] = '32'
+
 import csv
 import functools
 from typing import Any
 from timeit import default_timer as timer
 import resource
+from flax import jax_utils
 
 low, high = resource.getrlimit(resource.RLIMIT_NOFILE)
 resource.setrlimit(resource.RLIMIT_NOFILE, (high, high))
@@ -16,7 +24,7 @@ from flax.training import train_state
 from flax.training.dynamic_scale import DynamicScale
 import jax
 import jax.numpy as jnp
-from jax import random
+from jax import random, lax
 from jax.flatten_util import ravel_pytree
 import ml_collections
 import optax
@@ -27,13 +35,12 @@ from experiments.dnn import input_pipeline
 from experiments.dnn import resnet_models
 from experiments.dnn.dnn_test_utils import start_test, write_config_to_file, get_config, get_optimizer
 
-
 # Hide any GPUs from TensorFlow. Otherwise, TF might reserve memory and make it unavailable to JAX.
 tf.config.experimental.set_visible_devices([], 'GPU')
 print('JAX local devices: %r', jax.local_devices())
 
-
 NUM_CLASSES = 1000
+b_parallel = True
 
 
 def create_model(*, model_cls, half_precision, **kwargs):
@@ -72,6 +79,8 @@ def compute_metrics(logits, labels):
         'loss': loss,
         'accuracy': accuracy,
     }
+    if b_parallel:
+        metrics = lax.pmean(metrics, axis_name='batch')
     return metrics
 
 
@@ -95,7 +104,8 @@ def create_learning_rate_fn(
 
 def loss_fn(params, batch, state):
     """loss function used for training."""
-    logits, new_model_state = state.apply_fn({'params': params, 'batch_stats': state.batch_stats}, batch['image'], mutable=['batch_stats'])
+    logits, new_model_state = state.apply_fn({'params': params, 'batch_stats': state.batch_stats}, batch['image'],
+                                             mutable=['batch_stats'])
     loss = cross_entropy_loss(logits, batch['label'])
     weight_penalty_params = jax.tree_leaves(params)  # Change to jax.tree_util.tree_leaves
     weight_decay = 0.0001
@@ -120,6 +130,9 @@ def train_step(state, batch, learning_rate_fn):
     else:
         grad_fn = jax.value_and_grad(loss_fn, has_aux=True)
         aux, grads = grad_fn(state.params, batch, state)
+        if b_parallel:
+            # Re-use same axis_name as in the call to `pmap(...train_step...)` below.
+            grads = lax.pmean(grads, axis_name='batch')
     new_model_state, logits = aux[1]
     metrics = compute_metrics(logits, batch['label'])
     metrics['learning_rate'] = lr
@@ -150,13 +163,32 @@ def eval_step(state, batch):
     return compute_metrics(logits, batch['label'])
 
 
+# Relevant only for parallel training
+def prepare_tf_data(xs):
+    """Convert a input batch from tf Tensors to numpy arrays."""
+    local_device_count = jax.local_device_count()
+
+    def _prepare(x):
+        # Use _numpy() for zero-copy conversion between TF and NumPy.
+        x = x._numpy()  # pylint: disable=protected-access
+
+        # reshape (host_batch_size, height, width, 3) to (local_devices, device_batch_size, height, width, 3)
+        return x.reshape((local_device_count, -1) + x.shape[1:])
+
+    return jax.tree_map(_prepare, xs)
+
+
 def create_input_iter(dataset_builder, batch_size, image_size, dtype, train,
                       cache):
     ds = input_pipeline.create_split(
-        dataset_builder, batch_size, image_size=image_size, dtype=dtype,
-        train=train, cache=cache)
-    ds = tfds.as_numpy(ds)
-    return iter(ds)
+        dataset_builder, batch_size, image_size=image_size, dtype=dtype, train=train, cache=cache)
+    if b_parallel:
+        it = map(prepare_tf_data, ds)
+        it = jax_utils.prefetch_to_device(it, 2)
+    else:
+        ds = tfds.as_numpy(ds)
+        it = iter(ds)
+    return it
 
 
 class TrainState(train_state.TrainState):
@@ -175,10 +207,19 @@ def save_checkpoint(state, workdir):
         checkpoints.save_checkpoint(workdir, state, step, keep=3)
 
 
+# Relevant only for parallel training.
+# pmean only works inside pmap because it needs an axis name.
+# This function will average the inputs across all devices.
+cross_replica_mean = jax.pmap(lambda x: lax.pmean(x, 'x'), 'x')
+
+
 def sync_batch_stats(state):
     """Sync the batch statistics across replicas."""
-    # Each device has its own version of the running average batch statistics and we sync them before evaluation.
-    return state.replace(batch_stats=state.batch_stats)
+    if b_parallel:
+        # Each device has its own version of the running average batch statistics, and we sync them before evaluation.
+        return state.replace(batch_stats=cross_replica_mean(state.batch_stats))
+    else:
+        return state.replace(batch_stats=state.batch_stats)
 
 
 def create_train_state(rng, conf, model, image_size, learning_rate_fn, batch, half_precision):
@@ -200,7 +241,8 @@ def create_train_state(rng, conf, model, image_size, learning_rate_fn, batch, ha
     temp_state.apply_fn, temp_state.batch_stats = model.apply, batch_stats
     loss_f = lambda params, batch: loss_fn(params, batch, temp_state)[0]
     conf["learning_rate"] = learning_rate_fn
-    tx = get_optimizer(conf, loss_f, batch)
+    conf["alpha"] = learning_rate_fn
+    tx = get_optimizer(conf, loss_f, batch, b_call_ese_internally=False, b_parallel=b_parallel)
 
     num_params = ravel_pytree(params)[0].shape[0]
     print("num_params:", num_params)
@@ -212,6 +254,12 @@ def create_train_state(rng, conf, model, image_size, learning_rate_fn, batch, ha
         batch_stats=batch_stats,
         dynamic_scale=dynamic_scale)
     return state
+
+
+def update_ese(state, batch):
+    opt_state = state.tx.update_ese(state.params, state.opt_state, batch)
+    new_state = state.replace(opt_state=opt_state)
+    return new_state
 
 
 def train_and_evaluate(config: ml_collections.ConfigDict, conf, test_folder, workdir: str) -> TrainState:
@@ -232,9 +280,12 @@ def train_and_evaluate(config: ml_collections.ConfigDict, conf, test_folder, wor
 
     image_size = 224
 
-    if config.batch_size % jax.device_count() > 0:
-        raise ValueError('Batch size must be divisible by the number of devices')
-    local_batch_size = config.batch_size // jax.process_count()
+    if b_parallel:
+        if config.batch_size % jax.device_count() > 0:
+            raise ValueError('Batch size must be divisible by the number of devices')
+        local_batch_size = config.batch_size // jax.process_count()
+    else:
+        local_batch_size = config.batch_size
 
     platform = jax.local_devices()[0].platform
 
@@ -276,7 +327,8 @@ def train_and_evaluate(config: ml_collections.ConfigDict, conf, test_folder, wor
 
     steps_per_checkpoint = steps_per_epoch * 10
 
-    print("steps_per_epoch:", steps_per_epoch, "num_steps:", num_steps, "steps_per_eval:", steps_per_eval, "steps_per_checkpoint:", steps_per_checkpoint)
+    print("steps_per_epoch:", steps_per_epoch, "num_steps:", num_steps, "steps_per_eval:", steps_per_eval,
+          "steps_per_checkpoint:", steps_per_checkpoint)
 
     base_learning_rate = config.learning_rate * config.batch_size / 256.
 
@@ -287,13 +339,20 @@ def train_and_evaluate(config: ml_collections.ConfigDict, conf, test_folder, wor
     learning_rate_fn = create_learning_rate_fn(
         config, base_learning_rate, steps_per_epoch)
 
-    state = create_train_state(rng, conf, model, image_size, learning_rate_fn, next(train_iter), config.half_precision)
-    #state = restore_checkpoint(state, workdir)
+    batch_ = next(train_iter)
+    state = create_train_state(rng, conf, model, image_size, learning_rate_fn, batch_, config.half_precision)
+    # state = restore_checkpoint(state, workdir)
     # step_offset > 0 if restarting from checkpoint
     step_offset = int(state.step)
-
-    p_train_step = jax.jit(functools.partial(train_step, learning_rate_fn=learning_rate_fn))
-    p_eval_step = jax.jit(eval_step)
+    if b_parallel:
+        state = jax_utils.replicate(state)
+        p_train_step = jax.pmap(functools.partial(train_step, learning_rate_fn=learning_rate_fn), axis_name='batch')
+        p_eval_step = jax.pmap(eval_step, axis_name='batch')
+        p_update_ese = jax.pmap(update_ese, axis_name='batch')
+    else:
+        p_train_step = jax.jit(functools.partial(train_step, learning_rate_fn=learning_rate_fn))
+        p_eval_step = jax.jit(eval_step)
+        p_update_ese = jax.jit(update_ese)
 
     train_metrics = []
     print('Initial compilation, this might take some minutes...')
@@ -304,7 +363,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict, conf, test_folder, wor
         batch = next(train_iter)
 
         if "fosi" in conf["optimizer"] and max(1, step + 1 - conf["num_warmup_iterations"]) % conf["num_iterations_between_ese"] == 0:
-            state = state.replace(opt_state=state.tx.update_ese(state.params, state.opt_state))
+            state = p_update_ese(state, batch_)
 
         state, metrics = p_train_step(state, batch)
         if step == step_offset:
@@ -327,19 +386,26 @@ def train_and_evaluate(config: ml_collections.ConfigDict, conf, test_folder, wor
                 eval_batch = next(eval_iter)
                 metrics = p_eval_step(state, eval_batch)
                 eval_metrics.append(metrics)
-            eval_metrics = jax.device_get(eval_metrics)
-            eval_metrics = common_utils.stack_forest(eval_metrics)
+            if b_parallel:
+                eval_metrics = common_utils.get_metrics(eval_metrics)
+            else:
+                eval_metrics = jax.device_get(eval_metrics)
+                eval_metrics = common_utils.stack_forest(eval_metrics)
             summary = jax.tree_map(lambda x: x.mean(), eval_metrics)
             print('eval epoch: %d, loss: %.4f, accuracy: %.2f' % (epoch, summary['loss'], summary['accuracy'] * 100))
 
-            tm = jax.device_get(train_metrics)
-            tm = common_utils.stack_forest(tm)
+            if b_parallel:
+                tm = common_utils.get_metrics(train_metrics)
+            else:
+                tm = jax.device_get(train_metrics)
+                tm = common_utils.stack_forest(tm)
             train_summary = jax.tree_map(lambda x: x.mean(), tm)
 
             with open(train_stats_file, 'a') as f:
                 csv_writer = csv.writer(f)
-                csv_writer.writerow([epoch, train_summary['loss'], train_summary['accuracy'], summary['loss'], summary['accuracy'],
-                                     jnp.maximum(0, epoch_end - epoch_start), jnp.maximum(0, timer() - start_time)])
+                csv_writer.writerow(
+                    [epoch, train_summary['loss'], train_summary['accuracy'], summary['loss'], summary['accuracy'],
+                     jnp.maximum(0, epoch_end - epoch_start), jnp.maximum(0, timer() - start_time)])
 
             if epoch == 0:
                 start_time = timer()
@@ -347,7 +413,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict, conf, test_folder, wor
 
         if (step + 1) % steps_per_checkpoint == 0 or step + 1 == num_steps:
             state = sync_batch_stats(state)
-            #save_checkpoint(state, workdir)
+            # save_checkpoint(state, workdir)
 
     # Wait until computations are done before exiting
     jax.random.normal(jax.random.PRNGKey(0), ()).block_until_ready()
@@ -375,8 +441,9 @@ if __name__ == '__main__':
     config.num_train_steps = -1
     config.steps_per_eval = -1
 
-    conf = get_config(optimizer="fosi_nesterov", approx_k=10, batch_size=config.batch_size, momentum=config.momentum,
-                      learning_rate=config.learning_rate, num_iterations_between_ese=800, approx_l=0, alpha=0.01, num_epochs=config.num_epochs)
+    conf = get_config(optimizer="fosi_momentum", approx_k=10, batch_size=config.batch_size, momentum=config.momentum,
+                      learning_rate=config.learning_rate, num_iterations_between_ese=800, approx_l=0, alpha=0.01,
+                      num_epochs=config.num_epochs)
     test_folder = start_test(conf["optimizer"], test_folder='test_results_resnet_imagenet')
     write_config_to_file(test_folder, conf)
 

@@ -66,7 +66,7 @@ def write_config_to_file(test_folder, conf):
         txt_file.write(str(conf))
 
 
-def get_optimizer(conf, loss_fn, batch, b_call_ese_internally=True):
+def get_optimizer(conf, loss_fn, batch, b_call_ese_internally=True, b_parallel=False):
     if conf["optimizer"] == 'sgd':
         optimizer = optax.sgd(conf["learning_rate"])
     elif conf["optimizer"] == 'momentum':
@@ -80,26 +80,30 @@ def get_optimizer(conf, loss_fn, batch, b_call_ese_internally=True):
                              num_iters_to_approx_eigs=conf["num_iterations_between_ese"],
                              approx_k=conf["approx_k"], approx_l=conf["approx_l"],
                              warmup_w=conf["num_warmup_iterations"], alpha=conf["alpha"],
-                             learning_rate_clip=conf["learning_rate_clip"], b_call_ese_internally=b_call_ese_internally)
+                             learning_rate_clip=conf["learning_rate_clip"],
+                             b_call_ese_internally=b_call_ese_internally, b_parallel=b_parallel)
     elif conf["optimizer"] == 'fosi_momentum':
         optimizer = fosi_momentum(optax.sgd(conf["learning_rate"], momentum=conf["momentum"], nesterov=False), loss_fn,
                                   batch, decay=conf["momentum"],
                                   num_iters_to_approx_eigs=conf["num_iterations_between_ese"],
                                   approx_k=conf["approx_k"], approx_l=conf["approx_l"],
                                   warmup_w=conf["num_warmup_iterations"], alpha=conf["alpha"],
-                                  learning_rate_clip=conf["learning_rate_clip"], b_call_ese_internally=b_call_ese_internally)
+                                  learning_rate_clip=conf["learning_rate_clip"],
+                                  b_call_ese_internally=b_call_ese_internally, b_parallel=b_parallel)
     elif conf["optimizer"] == 'fosi_nesterov':
         optimizer = fosi_nesterov(optax.sgd(conf["learning_rate"], momentum=conf["momentum"], nesterov=True), loss_fn,
                                   batch, decay=conf["momentum"],
                                   num_iters_to_approx_eigs=conf["num_iterations_between_ese"],
                                   approx_k=conf["approx_k"], approx_l=conf["approx_l"],
                                   warmup_w=conf["num_warmup_iterations"], alpha=conf["alpha"],
-                                  learning_rate_clip=conf["learning_rate_clip"], b_call_ese_internally=b_call_ese_internally)
+                                  learning_rate_clip=conf["learning_rate_clip"],
+                                  b_call_ese_internally=b_call_ese_internally, b_parallel=b_parallel)
     elif conf["optimizer"] == 'fosi_adam':
         optimizer = fosi_adam(optax.adam(conf["learning_rate"]), loss_fn, batch, decay=conf["momentum"],
                               num_iters_to_approx_eigs=conf["num_iterations_between_ese"],
                               approx_k=conf["approx_k"], approx_l=conf["approx_l"],
-                              warmup_w=conf["num_warmup_iterations"], alpha=conf["alpha"], b_call_ese_internally=b_call_ese_internally)
+                              warmup_w=conf["num_warmup_iterations"], alpha=conf["alpha"],
+                              b_call_ese_internally=b_call_ese_internally, b_parallel=b_parallel)
     else:
         raise ValueError("Illegal optimizer " + conf["optimizer"])
 
