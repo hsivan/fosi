@@ -163,7 +163,7 @@ def train_mobilenet(optimizer_name):
     net_params, state = model.init(random.PRNGKey(111), x, is_training=True)
 
     loss_f = lambda params, batch: loss_fn(params, batch, state)[0]
-    optimizer = get_optimizer(conf, loss_f, batch)
+    optimizer = get_optimizer(conf, loss_f, batch, b_call_ese_internally=False)
     opt_state = optimizer.init(net_params)
 
     ###############################    Training    ###############################
@@ -187,9 +187,11 @@ def train_mobilenet(optimizer_name):
         epoch_start = timer()
 
         # Training
-        for batch_data in train_ds:
+        for step, batch_data in enumerate(train_ds):
             bd = (jnp.array(batch_data[0], jnp.float32), jnp.array(batch_data[1], jnp.int32))
             iteration_start = timer()
+            if "fosi" in optimizer_name and max(1, (i * num_train_batches + step) + 1 - conf["num_warmup_iterations"]) % conf["num_iterations_between_ese"] == 0:
+                opt_state = optimizer.update_ese(net_params, opt_state)
             loss_value, acc, opt_state, net_params, state = train_step(opt_state, net_params, bd, state)
             iteration_end = timer()
 

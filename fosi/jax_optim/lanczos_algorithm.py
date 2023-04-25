@@ -106,7 +106,7 @@ def lanczos_alg(order, loss, rng_key, k_largest, l_smallest=0, return_precision=
         num_params = params_flatten.shape[0]
         tridiag = np.zeros((order, order), dtype=np.float64)
         vecs = np.zeros((order, num_params), dtype=np.float64)
-        init_vec = random.normal(rng_key, shape=(num_params,))
+        init_vec = random.normal(rng_key, shape=(num_params,), dtype=np.float64)
         init_vec = init_vec / np.linalg.norm(init_vec)
         vecs = vecs.at[0].set(init_vec)
 

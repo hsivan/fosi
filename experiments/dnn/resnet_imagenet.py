@@ -107,7 +107,7 @@ def loss_fn(params, batch, state):
     logits, new_model_state = state.apply_fn({'params': params, 'batch_stats': state.batch_stats}, batch['image'],
                                              mutable=['batch_stats'])
     loss = cross_entropy_loss(logits, batch['label'])
-    weight_penalty_params = jax.tree_leaves(params)  # Change to jax.tree_util.tree_leaves
+    weight_penalty_params = jax.tree_util.tree_leaves(params)
     weight_decay = 0.0001
     weight_l2 = sum([jnp.sum(x ** 2) for x in weight_penalty_params if x.ndim > 1])
     weight_penalty = weight_decay * 0.5 * weight_l2
@@ -241,7 +241,6 @@ def create_train_state(rng, conf, model, image_size, learning_rate_fn, batch, ha
     temp_state.apply_fn, temp_state.batch_stats = model.apply, batch_stats
     loss_f = lambda params, batch: loss_fn(params, batch, temp_state)[0]
     conf["learning_rate"] = learning_rate_fn
-    conf["alpha"] = learning_rate_fn
     tx = get_optimizer(conf, loss_f, batch, b_call_ese_internally=False, b_parallel=b_parallel)
 
     num_params = ravel_pytree(params)[0].shape[0]
@@ -443,7 +442,7 @@ if __name__ == '__main__':
 
     conf = get_config(optimizer="fosi_momentum", approx_k=10, batch_size=config.batch_size, momentum=config.momentum,
                       learning_rate=config.learning_rate, num_iterations_between_ese=800, approx_l=0, alpha=0.01,
-                      num_epochs=config.num_epochs)
+                      num_epochs=config.num_epochs, learning_rate_clip=3.0)
     test_folder = start_test(conf["optimizer"], test_folder='test_results_resnet_imagenet')
     write_config_to_file(test_folder, conf)
 

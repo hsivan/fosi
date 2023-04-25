@@ -8,6 +8,7 @@ if not os.path.isdir('./figures'):
 
 # ICML: textwidth=487.8225, columnwidth=234.8775
 # ACM: textwidth=506.295, columnwidth=241.14749
+# NeurIPS: textwidth=columnwidth=397.48499
 def get_figsize(columnwidth=234.8775, wf=1.0, hf=(5. ** 0.5 - 1.0) / 2.0, b_fixed_height=False):
     """Parameters:
       - wf [float]:  width fraction in columnwidth units

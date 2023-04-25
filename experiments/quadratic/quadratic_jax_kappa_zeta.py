@@ -211,7 +211,7 @@ def run_optimizers_with_different_momentums(kappa=1.14, dim_non_diag=50):
     pickle.dump(optimizers_scores, open(lr_pkl_file_name, 'wb'))
 
 
-def grid_search_lr_momentum_adam(kappa, dim_non_diag):
+def grid_search_lr_momentum(kappa, dim_non_diag):
     hessian, eigenvalues, eigenvectors = prepare_hessian(kappa, dim_non_diag)
 
     objective_fn = lambda x, batch=None: objective(x, hessian, batch)
@@ -224,9 +224,13 @@ def grid_search_lr_momentum_adam(kappa, dim_non_diag):
     ese_fn = get_ese_fn(objective_fn, approx_k, [None], l_smallest=0, return_precision='64')
     k_eigenvals, k_eigenvecs = ese_fn(x_initial)
     fosi_adam_update_fn = lambda x, g, m, v, t, eta, beta1, beta2, mn: fosi_adam_update(x, g, m, v, t, eta, beta1, beta2, mn, k_eigenvals, k_eigenvecs)
+    fosi_momentum_update_fn = lambda x, g, m, v, t, eta, beta1, beta2, mn: fosi_momentum_update(x, g, m, v, t, eta, beta1, beta2, mn, k_eigenvals, k_eigenvecs)
 
     optimizers = {"Adam": adam_update,
-                  "FOSI-Adam": fosi_adam_update_fn}
+                  "FOSI-Adam": fosi_adam_update_fn,
+                  "HB": momentum_update,
+                  "FOSI-HB (c=1)": fosi_momentum_update_fn,
+                  "FOSI-HB (c=inf)": fosi_momentum_update_fn}
 
     optimizers_scores = {}
 
@@ -234,12 +238,15 @@ def grid_search_lr_momentum_adam(kappa, dim_non_diag):
     lrs = numpy.logspace(-4, 1, 50)
 
     for lr in lrs:
-
         for optimizer_name, optimizer_update in optimizers.items():
+            if 'c=inf' in optimizer_name:
+                lr_ = lr * k_eigenvals[-1] / k_eigenvals[0]
+            else:
+                lr_ = lr
             best_score = np.inf
             best_beta1 = None
             for beta1 in momentums:
-                scores, solutions = optimize(objective_fn, x_initial, n_iter, lr, beta1, beta2,
+                scores, solutions = optimize(objective_fn, x_initial, n_iter, lr_, beta1, beta2,
                                              optimizers[optimizer_name])
                 if jax.device_get(scores)[-1] < best_score:
                     best_score = jax.device_get(scores)[-1]
@@ -262,4 +269,4 @@ if __name__ == "__main__":
         run_optimizers_with_different_learning_rates(kappa, dim_non_diag)
 
     run_optimizers_with_different_momentums(1.12, 90)
-    grid_search_lr_momentum_adam(1.12, 90)
+    grid_search_lr_momentum(1.12, 90)

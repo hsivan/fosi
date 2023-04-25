@@ -64,7 +64,9 @@ def plot_quadratic_random_orthogonal_basis(fig_file_name="quadratic_random_ortho
 
 
 def plot_quadratic_random_orthogonal_basis_4_funcs(fig_file_name="quadratic_random_orthogonal_basis_4_funcs.pdf", pkl_file="optimizers_scores_quadratic.pkl"):
-    set_rc_params()
+    scaling_factor = 1.0 if 'pdf' in fig_file_name else 1.5
+    y_shift = 0 if 'pdf' in fig_file_name else 30
+    set_rc_params(scaling_factor)
 
     optimizers_scores = pickle.load(open(root_result_folder + pkl_file, 'rb'))
     optimizers_colors = {'Adam': 'tab:blue', 'HB': 'tab:orange', 'GD': 'tab:red'}
@@ -79,7 +81,7 @@ def plot_quadratic_random_orthogonal_basis_4_funcs(fig_file_name="quadratic_rand
     max_eigvals = [max_eigvals[0], max_eigvals[-1]]
 
     # Plot learning curves
-    fig_learning_curve, ax_learning_curve = plt.subplots(len(n_dims), len(max_eigvals), figsize=get_figsize(hf=0.55), sharex=True, sharey=True)
+    fig_learning_curve, ax_learning_curve = plt.subplots(len(n_dims), len(max_eigvals), figsize=get_figsize(wf=scaling_factor, hf=0.55), sharex=True, sharey=True)
 
     for n_dim_idx, n_dim in enumerate(n_dims):
         for max_eigval_idx, max_eigval in enumerate(max_eigvals):
@@ -87,23 +89,23 @@ def plot_quadratic_random_orthogonal_basis_4_funcs(fig_file_name="quadratic_rand
             for optimizer_name, optimizer_color in optimizers_colors.items():
                 # base optimizer
                 optimizer_scores = optimizers_scores[(n_dim, max_eigval, optimizer_name)]
-                ax.plot(range(len(optimizer_scores)), optimizer_scores, label=optimizer_name, color=optimizer_color, linewidth=0.8, linestyle="--")
+                ax.plot(range(len(optimizer_scores)), optimizer_scores, label=optimizer_name, color=optimizer_color, linewidth=0.8*scaling_factor, linestyle="--")
                 # FOSI w/ base optimizer
                 optimizer_scores = optimizers_scores[(n_dim, max_eigval, 'FOSI-' + optimizer_name)]
-                ax.plot(range(len(optimizer_scores)), optimizer_scores, label='FOSI-' + optimizer_name, color=optimizer_color, linewidth=0.8, linestyle="-")
+                ax.plot(range(len(optimizer_scores)), optimizer_scores, label='FOSI-' + optimizer_name, color=optimizer_color, linewidth=0.8*scaling_factor, linestyle="-")
 
             ax.set_yscale('log')
 
             if max_eigval_idx == 0:
                 ax.annotate(r'$n$=' + str(n_dim) + r', $\lambda_1$=' + str(max_eigval),
                             xy=(1, 0), xycoords='axes fraction',
-                            xytext=(-5, 35), textcoords='offset pixels',
+                            xytext=(-5, 35+y_shift), textcoords='offset pixels',
                             horizontalalignment='right',
                             verticalalignment='bottom')
             else:
                 ax.annotate(r'$n$=' + str(n_dim) + r', $\lambda_1$=' + str(max_eigval),
                             xy=(1, 0), xycoords='axes fraction',
-                            xytext=(-5, 30), textcoords='offset pixels',
+                            xytext=(-5, 30+y_shift), textcoords='offset pixels',
                             horizontalalignment='right',
                             verticalalignment='bottom')
 
@@ -121,6 +123,72 @@ def plot_quadratic_random_orthogonal_basis_4_funcs(fig_file_name="quadratic_rand
     handles, labels = ax_learning_curve[0][0].get_legend_handles_labels()
     fig_learning_curve.legend(handles, labels, framealpha=0, frameon=False, loc="upper center", bbox_to_anchor=(0.5, 1.02), ncol=6, columnspacing=1.5, handletextpad=0.29)
     plt.subplots_adjust(top=0.9, bottom=0.17, left=0.15, right=0.99, wspace=0.13, hspace=0.13)
+
+    plt.savefig(output_folder + fig_file_name)
+    #plt.show()
+    plt.close(fig_learning_curve)
+    rcParams.update(rcParamsDefault)
+
+
+def plot_quadratic_random_orthogonal_basis_4_funcs_flat(fig_file_name="quadratic_random_orthogonal_basis_4_funcs_flat.pdf", pkl_file="optimizers_scores_quadratic.pkl"):
+    scaling_factor = 1.0 if 'pdf' in fig_file_name else 1.5
+    y_shift = 0 if 'pdf' in fig_file_name else 30
+    set_rc_params(scaling_factor)
+
+    optimizers_scores = pickle.load(open(root_result_folder + pkl_file, 'rb'))
+    optimizers_colors = {'Adam': 'tab:blue', 'HB': 'tab:orange', 'GD': 'tab:red'}
+
+    n_dims = list(set([x for x, _, _ in optimizers_scores.keys()]))
+    n_dims.sort()
+    max_eigvals = list(set([x for _, x, _ in optimizers_scores.keys()]))
+    max_eigvals.sort()
+
+    # Plot only extreme dimensions and extreme eigvals
+    n_dims = [n_dims[0], n_dims[-1]]
+    max_eigvals = [max_eigvals[0], max_eigvals[-1]]
+
+    # Plot learning curves
+    fig_learning_curve, ax_learning_curve = plt.subplots(1, len(n_dims) + len(max_eigvals), figsize=get_figsize(columnwidth=397.48499, wf=scaling_factor, hf=0.2), sharex=True, sharey=True)
+
+    for n_dim_idx, n_dim in enumerate(n_dims):
+        for max_eigval_idx, max_eigval in enumerate(max_eigvals):
+            ax = ax_learning_curve[n_dim_idx*len(max_eigvals) + max_eigval_idx]
+            for optimizer_name, optimizer_color in optimizers_colors.items():
+                # base optimizer
+                optimizer_scores = optimizers_scores[(n_dim, max_eigval, optimizer_name)]
+                ax.plot(range(len(optimizer_scores)), optimizer_scores, label=optimizer_name, color=optimizer_color, linewidth=0.8*scaling_factor, linestyle="--")
+                # FOSI w/ base optimizer
+                optimizer_scores = optimizers_scores[(n_dim, max_eigval, 'FOSI-' + optimizer_name)]
+                ax.plot(range(len(optimizer_scores)), optimizer_scores, label='FOSI-' + optimizer_name, color=optimizer_color, linewidth=0.8*scaling_factor, linestyle="-")
+
+            ax.set_yscale('log')
+
+            if max_eigval_idx == 0:
+                ax.annotate(r'$n$=' + str(n_dim) + r', $\lambda_1$=' + str(max_eigval),
+                            xy=(1, 0), xycoords='axes fraction',
+                            xytext=(-5, 35+y_shift), textcoords='offset pixels',
+                            horizontalalignment='right',
+                            verticalalignment='bottom')
+            else:
+                ax.annotate(r'$n$=' + str(n_dim) + r', $\lambda_1$=' + str(max_eigval),
+                            xy=(1, 0), xycoords='axes fraction',
+                            xytext=(-5, 30+y_shift), textcoords='offset pixels',
+                            horizontalalignment='right',
+                            verticalalignment='bottom')
+
+            ax.spines['right'].set_visible(False)
+            ax.spines['top'].set_visible(False)
+            ax.spines['bottom'].set_linewidth(0.5)
+            ax.spines['left'].set_linewidth(0.5)
+            ax.tick_params(width=0.5)
+
+            ax.set_xlabel('iteration')
+            if max_eigval_idx + n_dim_idx == 0:
+                ax.set_ylabel(r'$f(\theta)$')
+
+    handles, labels = ax_learning_curve[0].get_legend_handles_labels()
+    fig_learning_curve.legend(handles, labels, framealpha=0, frameon=False, loc="upper center", bbox_to_anchor=(0.5, 1.04), ncol=6, columnspacing=1.5, handletextpad=0.29)
+    plt.subplots_adjust(top=0.87, bottom=0.29, left=0.08, right=0.99, wspace=0.13, hspace=0.13)
 
     plt.savefig(output_folder + fig_file_name)
     #plt.show()
@@ -752,6 +820,65 @@ def plot_quadratic_jax_kappa_zeta_learning_rate_single_func():
     rcParams.update(rcParamsDefault)
 
 
+def plot_quadratic_jax_kappa_zeta_learning_rate_momentum_single_func():
+    kappa_dim_non_diag_tuples = zip([90], [1.12])
+
+    set_rc_params()
+
+    optimizers_colors = {'Adam': 'black', 'HB': 'black',
+                         'FOSI-Adam': 'tab:blue', 'FOSI-HB (c=1)': 'tab:orange',
+                         'FOSI-HB (c=inf)': 'tab:orange'}
+
+    fig, axs = plt.subplots(1, 2, figsize=get_figsize(wf=0.7, hf=0.4/0.7), sharex=True, sharey='row')
+
+    dim_non_diag, kappa = next(kappa_dim_non_diag_tuples)
+
+    lr_pkl_file_name = root_result_folder + "quadratic_jax_kappa_zeta_lr_momentum_" + str(kappa).replace('.', '-') + '_' + str(dim_non_diag) + ".pkl"
+    optimizers_scores = pickle.load(open(lr_pkl_file_name, 'rb'))
+
+    for idx, optimizer_name in enumerate(['Adam', 'HB']):
+        ax = axs[idx]
+
+        optimizers_related = [optimizer_name, 'FOSI-' + optimizer_name]
+        if optimizer_name == 'HB':
+            optimizers_related = [optimizer_name, 'FOSI-HB (c=1)', 'FOSI-HB (c=inf)']
+
+        for optimizer in optimizers_related:
+            res = optimizers_scores[optimizer]
+            res.sort(key=lambda val: val[0])
+            res = list(zip(*res))
+
+            eta_arr = np.array(res[0])
+            scores_arr = np.array(res[2])
+
+            scores_arr = np.nan_to_num(scores_arr, nan=np.inf)
+
+            linestyle = '-' if 'FOSI' in optimizer else '--'
+            linestyle = '-.' if '(c=1)' in optimizer else linestyle
+            linewidth = 0.7 if 'FOSI' in optimizer else 1.2
+            ax.plot(eta_arr, scores_arr, label=optimizer, color=optimizers_colors[optimizer], linestyle=linestyle, linewidth=linewidth)
+
+        ax.set_xscale('log')
+        ax.set_yscale('log')
+        ax.set_ylim(1e-3, 450)
+        if idx == 0:
+            ax.set_ylabel(r'$f_{' + str(kappa) + r',' + str(dim_non_diag) + r'}(\theta_{200})$')
+        ax.set_xlabel(r'$\eta$', labelpad=0)
+
+        ax.spines['right'].set_visible(False)
+        ax.spines['top'].set_visible(False)
+        ax.spines['bottom'].set_linewidth(0.5)
+        ax.spines['left'].set_linewidth(0.5)
+        ax.tick_params(width=0.5)
+
+        ax.legend(loc="upper center", bbox_to_anchor=(0.5, 1.6), frameon=False)
+
+    plt.subplots_adjust(top=0.72, bottom=0.2, left=0.2, right=0.99, wspace=0.2)
+    plt.savefig(output_folder + "quadratic_jax_kappa_zeta_lr_momentum_single_func.pdf")
+    plt.close(fig)
+    rcParams.update(rcParamsDefault)
+
+
 def plot_quadratic_jax_kappa_zeta_learning_rate_momentum_single_func_adam(fig_type='pdf'):
     scaling_factor = 1.0 if 'pdf' in fig_type else 1.5
     kappa_dim_non_diag_tuples = zip([90], [1.12])
@@ -908,8 +1035,10 @@ if __name__ == "__main__":
     output_folder = './figures/'
 
     # Random orthogonal basis, different dimension and lambda_1
-    plot_quadratic_random_orthogonal_basis()
-    plot_quadratic_random_orthogonal_basis_4_funcs()
+    #plot_quadratic_random_orthogonal_basis()
+    plot_quadratic_random_orthogonal_basis_4_funcs("quadratic_random_orthogonal_basis_4_funcs.pdf")
+    plot_quadratic_random_orthogonal_basis_4_funcs("quadratic_random_orthogonal_basis_4_funcs.png")
+    plot_quadratic_random_orthogonal_basis_4_funcs_flat("quadratic_random_orthogonal_basis_4_funcs_flat.pdf")
 
     # GD and FOSI-GD, for effective condition number larger than the original one
     plot_quadratic_random_orthogonal_basis_gd()
@@ -932,3 +1061,4 @@ if __name__ == "__main__":
 
     plot_quadratic_jax_kappa_zeta_learning_rate_momentum_single_func_adam('pdf')
     plot_quadratic_jax_kappa_zeta_learning_rate_momentum_single_func_adam('png')
+    plot_quadratic_jax_kappa_zeta_learning_rate_momentum_single_func()

@@ -40,8 +40,8 @@ def get_best_config_test_folder(optimizer_name, test_result_root_folder, learnin
                 if conf["learning_rate"] == learning_rate and conf["momentum"] == momentum:
                     # Read train_stats.csv file and get the best loss (smallest)
                     df = pd.read_csv(test_folder + '/train_stats.csv')
-                    if np.min(df['train_loss']) < min_loss:
-                        min_loss = np.min(df['train_loss'])
+                    if np.min(df['val_loss'][df['val_loss'] != 0]) < min_loss:
+                        min_loss = np.min(df['val_loss'][df['val_loss'] != 0])
                         best_result_folder = test_folder
                         best_learning_rate, best_momentum = learning_rate, momentum
                     break
@@ -50,27 +50,31 @@ def get_best_config_test_folder(optimizer_name, test_result_root_folder, learnin
     return best_result_folder
 
 
-def get_test_folders(test_result_root_folder):
+def get_test_folders(test_result_root_folder, b_second_order_algos=False):
     # Return 4 test folders - last run for each optimizer, Adam (adam), HB (momentum), FOSI-Adam (fosi_adam),
-    # and FOSI-HB (fosi_momentum)
+    # and FOSI-HB (fosi_momentum).
+    # If b_second_order_algos=True then return FOSI-HB, K-FAC, and L-BFGS.
+
+    optimizers = ['adam', 'momentum', 'fosi_adam', 'fosi_momentum'] if not b_second_order_algos else ['fosi_momentum']
 
     test_folders = []
 
-    for optimizer in ['adam', 'momentum', 'fosi_adam', 'fosi_momentum']:
+    for optimizer in optimizers:
         optimizer_test_folders = [test_result_root_folder + f for f in os.listdir(test_result_root_folder) if f.startswith('results_' + optimizer + '_')]
         optimizer_test_folders.sort()
         last_folder = optimizer_test_folders[-1]
         test_folders.append(last_folder)
 
-    # Add K-FAC
-    last_folder = get_best_config_test_folder('kfac', test_result_root_folder, learning_rates=[None, 1e-3, 1e-2, 1e-1], momentums=[None, 0.1, 0.5, 0.9])
-    if last_folder is not None:
-        test_folders.append(last_folder)
+    if b_second_order_algos:
+        # Add K-FAC
+        last_folder = get_best_config_test_folder('kfac', test_result_root_folder, learning_rates=[None, 1e-3, 1e-2, 1e-1], momentums=[None, 0.1, 0.5, 0.9])
+        if last_folder is not None:
+            test_folders.append(last_folder)
 
-    # Add L-BFGS
-    last_folder = get_best_config_test_folder('lbfgs', test_result_root_folder, learning_rates=[0], momentums=[10, 20, 40, 80, 100])  # momentum is actually history_size
-    if last_folder is not None:
-        test_folders.append(last_folder)
+        # Add L-BFGS
+        last_folder = get_best_config_test_folder('lbfgs', test_result_root_folder, learning_rates=[0], momentums=[10, 20, 40, 80, 100])  # momentum is actually history_size
+        if last_folder is not None:
+            test_folders.append(last_folder)
 
     return test_folders
 
@@ -136,11 +140,12 @@ def plot_train_loss_over_iterations_and_wall_time(test_result_root_folder, fig_f
 
 
 def plot_loss_and_accuracy_for_mobilenet(test_result_root_folder, fig_file_name, y_top_lim, y_bottom_lim=None, max_data_point=None, x_label='epoch', skip_val=1):
-    set_rc_params()
+    scaling_factor = 1 if '.pdf' in fig_file_name else 1.5
+    set_rc_params(scaling_factor)
 
     test_folders = get_test_folders(test_result_root_folder)
 
-    fig, axes = plt.subplots(2, 2, figsize=get_figsize(hf=0.52), sharex='col')
+    fig, axes = plt.subplots(2, 2, figsize=get_figsize(wf=scaling_factor, hf=0.52), sharex='col')
 
     min_val = np.inf
     tenth_min_val = np.inf
@@ -159,25 +164,25 @@ def plot_loss_and_accuracy_for_mobilenet(test_result_root_folder, fig_file_name,
         ax.plot(df['epoch'][:max_data_point][df['train_loss'] != 0],
                 df['train_loss'][:max_data_point][df['train_loss'] != 0],
                 label=mapping[optimizer][2], color=mapping[optimizer][0],
-                linestyle=mapping[optimizer][1], linewidth=0.7)
+                linestyle=mapping[optimizer][1], linewidth=0.7*scaling_factor)
 
         ax = axes[0][1]
         ax.plot(df['wall_time'][:max_data_point][df['train_loss'] != 0],
                 df['train_loss'][:max_data_point][df['train_loss'] != 0],
                 label=mapping[optimizer][2], color=mapping[optimizer][0],
-                linestyle=mapping[optimizer][1], linewidth=0.7)
+                linestyle=mapping[optimizer][1], linewidth=0.7*scaling_factor)
 
         ax = axes[1][0]
         ax.plot(df['epoch'][:max_data_point][df['val_loss'] != 0][::skip_val],
                 df['val_loss'][:max_data_point][df['val_loss'] != 0][::skip_val],
                 label=mapping[optimizer][2], color=mapping[optimizer][0],
-                linestyle=mapping[optimizer][1], linewidth=0.7)
+                linestyle=mapping[optimizer][1], linewidth=0.7*scaling_factor)
 
         ax = axes[1][1]
         ax.plot(df['wall_time'][:max_data_point][df['val_acc'] != 0][::skip_val],
                 df['val_acc'][:max_data_point][df['val_acc'] != 0][::skip_val],
                 label=mapping[optimizer][2], color=mapping[optimizer][0],
-                linestyle=mapping[optimizer][1], linewidth=0.7)
+                linestyle=mapping[optimizer][1], linewidth=0.7*scaling_factor)
 
     axes[0][0].set_ylabel('train loss', labelpad=6)
     axes[0][0].set_ylim(y_bottom_lim, y_top_lim)
@@ -214,11 +219,11 @@ def plot_loss_and_accuracy_for_mobilenet(test_result_root_folder, fig_file_name,
     rcParams.update(rcParamsDefault)
 
 
-def plot_train_loss_over_iterations_and_wall_time_and_validation_loss(test_result_root_folder, fig_file_name, y_top_lim, y_bottom_lim=None, max_data_point=None, x_label='epoch', skip_val=1):
+def plot_train_loss_over_iterations_and_wall_time_and_validation_loss(test_result_root_folder, fig_file_name, y_top_lim, y_bottom_lim=None, max_data_point=None, x_label='epoch', skip_val=1, b_second_order_algos=False):
     scaling_factor = 1 if '.pdf' in fig_file_name else 1.5
     set_rc_params(scaling_factor)
 
-    test_folders = get_test_folders(test_result_root_folder)
+    test_folders = get_test_folders(test_result_root_folder, b_second_order_algos)
 
     fig, axes = plt.subplots(1, 3, sharey=True, figsize=get_figsize(wf=scaling_factor, hf=0.4))
 
@@ -245,10 +250,10 @@ def plot_train_loss_over_iterations_and_wall_time_and_validation_loss(test_resul
         ax = axes[1]
         ax.plot(df['wall_time'][:max_data_point][df['train_loss'] != 0], df['train_loss'][:max_data_point][df['train_loss'] != 0],
                 label=mapping[optimizer][2], color=mapping[optimizer][0], linestyle=mapping[optimizer][1], linewidth=0.7*scaling_factor)
-        if optimizer != 'kfac' and df['wall_time'][:max_data_point][df['train_loss'] != 0].iloc[-1] > max_y_wall_time:
-            max_y_wall_time = df['wall_time'][:max_data_point][df['train_loss'] != 0].iloc[-1]
-        if optimizer == 'kfac':
-            kfac_wall_times = df['wall_time'][:max_data_point][df['train_loss'] != 0]
+        #if optimizer != 'lbfgs' and df['wall_time'][:max_data_point][df['train_loss'] != 0].iloc[-1] > max_y_wall_time:
+        #    max_y_wall_time = df['wall_time'][:max_data_point][df['train_loss'] != 0].iloc[-1]
+        #if optimizer == 'kfac':
+        #    kfac_wall_times = df['wall_time'][:max_data_point][df['train_loss'] != 0]
 
         ax = axes[2]
         ax.plot(df['epoch'][:max_data_point][df['val_loss'] != 0][::skip_val], df['val_loss'][:max_data_point][df['val_loss'] != 0][::skip_val],
@@ -259,12 +264,13 @@ def plot_train_loss_over_iterations_and_wall_time_and_validation_loss(test_resul
     y_bottom_lim = min_val - (tenth_min_val - min_val) if y_bottom_lim is None else y_bottom_lim
     axes[1].set_ylim(y_bottom_lim, y_top_lim)
     # Cut the x-axis at the first wall time point of K-FAC that is larger than the last one of FOSI's
-    if kfac_wall_times is not None:
-        for wall_time in kfac_wall_times:
-            if wall_time > max_y_wall_time:
-                max_y_wall_time = wall_time
-                break
-    #axes[1].set_xlim(right=max_y_wall_time)  # Cut the x-axis at the end of FOSI's graph, not K-FAC
+    #if kfac_wall_times is not None:
+    #    for wall_time in kfac_wall_times:
+    #        if wall_time > max_y_wall_time:
+    #            max_y_wall_time = wall_time
+    #            break
+    #axes[1].set_xlim(right=max_y_wall_time)  # Cut the x-axis at the end of FOSI's graph, not L-BFGS
+
     axes[1].set_xlabel('wall time (seconds)')
     axes[1].set_ylabel('train loss')
     axes[2].set_xlabel(x_label)
@@ -281,6 +287,7 @@ def plot_train_loss_over_iterations_and_wall_time_and_validation_loss(test_resul
         ax.spines['left'].set_linewidth(0.5)
         ax.tick_params(width=0.5)
 
+    fig_file_name = fig_file_name if not b_second_order_algos else fig_file_name.replace('.pdf', '_sec_ord.pdf')
     plt.savefig(output_folder + fig_file_name)
     #plt.show()
     plt.close(fig)
@@ -288,12 +295,83 @@ def plot_train_loss_over_iterations_and_wall_time_and_validation_loss(test_resul
     rcParams.update(rcParamsDefault)
 
 
+def plot_train_valid_loss_over_wall_sec_ord(test_result_root_folder, fig_file_name, y_top_lim, y_bottom_lim=None, max_data_point=None, skip_val=1, b_second_order_algos=False):
+    scaling_factor = 1 if '.pdf' in fig_file_name else 1.5
+    set_rc_params(scaling_factor)
+
+    test_folders = get_test_folders(test_result_root_folder, b_second_order_algos)
+
+    fig, axes = plt.subplots(1, 2, sharey=True, figsize=get_figsize(wf=scaling_factor, hf=0.35))
+
+    min_val = np.inf
+    tenth_min_val = np.inf
+    max_y_wall_time = -np.inf
+    kfac_wall_times = None
+
+    for test_folder in test_folders:
+        optimizer = get_optimizer(test_folder)
+
+        df = pd.read_csv(test_folder + '/train_stats.csv')
+        max_data_point = len(df) if max_data_point is None else max_data_point
+
+        sorted_vals = np.sort(df['train_loss'][df['train_loss'] != 0][:max_data_point])
+        if sorted_vals[0] < min_val:
+            min_val = sorted_vals[0]
+            tenth_min_val = sorted_vals[10]
+
+        ax = axes[0]
+        ax.plot(df['wall_time'][:max_data_point][df['train_loss'] != 0], df['train_loss'][:max_data_point][df['train_loss'] != 0],
+                label=mapping[optimizer][2], color=mapping[optimizer][0], linestyle=mapping[optimizer][1], linewidth=0.7*scaling_factor)
+        '''if optimizer != 'lbfgs' and df['wall_time'][:max_data_point][df['train_loss'] != 0].iloc[-1] > max_y_wall_time:
+            max_y_wall_time = df['wall_time'][:max_data_point][df['train_loss'] != 0].iloc[-1]
+        if optimizer == 'kfac':
+            kfac_wall_times = df['wall_time'][:max_data_point][df['train_loss'] != 0]'''
+
+        ax = axes[1]
+        ax.plot(df['wall_time'][:max_data_point][df['val_loss'] != 0][::skip_val], df['val_loss'][:max_data_point][df['val_loss'] != 0][::skip_val],
+                label=mapping[optimizer][2], color=mapping[optimizer][0], linestyle=mapping[optimizer][1], linewidth=0.7*scaling_factor)
+
+    axes[0].set_xlabel('wall time (seconds)')
+    axes[0].set_ylabel('train loss')
+    y_bottom_lim = min_val - (tenth_min_val - min_val) if y_bottom_lim is None else y_bottom_lim
+    axes[1].set_ylim(y_bottom_lim, y_top_lim)
+    # Cut the x-axis at the first wall time point of K-FAC that is larger than the last one of FOSI's
+    '''if kfac_wall_times is not None:
+        for wall_time in kfac_wall_times:
+            if wall_time > max_y_wall_time:
+                max_y_wall_time = wall_time
+                break
+    axes[1].set_xlim(right=max_y_wall_time)  # Cut the x-axis at the end of FOSI's graph, not L-BFGS
+    '''
+    axes[1].set_xlabel('wall time (seconds)')
+    axes[1].set_ylabel('validation loss')
+
+    handles, labels = axes[0].get_legend_handles_labels()
+    fig.legend(handles, labels, framealpha=0, frameon=False, loc="upper center", bbox_to_anchor=(0.5, 1.05), ncol=len(test_folders), columnspacing=1.0, handletextpad=0.29, handlelength=1.0)
+    plt.subplots_adjust(top=0.87, bottom=0.27, left=0.15, right=0.98, wspace=0.23)
+
+    for ax in axes:
+        ax.spines['right'].set_visible(False)
+        ax.spines['top'].set_visible(False)
+        ax.spines['bottom'].set_linewidth(0.5)
+        ax.spines['left'].set_linewidth(0.5)
+        ax.tick_params(width=0.5)
+
+    fig_file_name = fig_file_name if not b_second_order_algos else fig_file_name.replace('.pdf', '_sec_ord.pdf')
+    plt.savefig(output_folder + fig_file_name)
+    #plt.show()
+    plt.close(fig)
+
+    rcParams.update(rcParamsDefault)
+
 def plot_train_loss_over_iterations_and_wall_time_and_validation_accuracy(test_result_root_folder, fig_file_name, y_top_lim, y_bottom_lim=None, max_data_point=None, x_label='epoch', skip_val=1):
-    set_rc_params()
+    scaling_factor = 1 if '.pdf' in fig_file_name else 1.5
+    suffix = '.pdf' if '.pdf' in fig_file_name else '.png'
+    set_rc_params(scaling_factor)
 
     test_folders = get_test_folders(test_result_root_folder)
 
-    fig, axes = plt.subplots(1, 2, figsize=get_figsize(wf=0.6, hf=0.35/0.6), sharey=True)
+    fig, axes = plt.subplots(1, 2, figsize=get_figsize(wf=scaling_factor*0.6, hf=0.35/0.6), sharey=True)
 
     min_val = np.inf
     tenth_min_val = np.inf
@@ -311,11 +389,14 @@ def plot_train_loss_over_iterations_and_wall_time_and_validation_accuracy(test_r
 
         ax = axes[0]
         ax.plot(df['epoch'][:max_data_point][df['train_loss'] != 0], df['train_loss'][:max_data_point][df['train_loss'] != 0],
-                label=mapping[optimizer][2], color=mapping[optimizer][0], linestyle=mapping[optimizer][1], linewidth=0.7)
+                label=mapping[optimizer][2], color=mapping[optimizer][0], linestyle=mapping[optimizer][1], linewidth=0.7*scaling_factor)
 
         ax = axes[1]
         ax.plot(df['wall_time'][:max_data_point][df['train_loss'] != 0], df['train_loss'][:max_data_point][df['train_loss'] != 0],
-                label=mapping[optimizer][2], color=mapping[optimizer][0], linestyle=mapping[optimizer][1], linewidth=0.7)
+                label=mapping[optimizer][2], color=mapping[optimizer][0], linestyle=mapping[optimizer][1], linewidth=0.7*scaling_factor)
+
+        if optimizer == 'kfac':
+            kfac_wall_times = df['wall_time'][:max_data_point][df['train_loss'] != 0]
 
     axes[0].set_xlabel(x_label)
     axes[0].set_ylabel('train loss')
@@ -323,6 +404,8 @@ def plot_train_loss_over_iterations_and_wall_time_and_validation_accuracy(test_r
     axes[1].set_ylim(y_bottom_lim, y_top_lim)
     axes[1].set_xlabel('wall time (sec.)')
     axes[0].set_yticks([0.01, 0.02, 0.03])
+    if kfac_wall_times is not None:
+        axes[1].set_xlim(right=np.max(kfac_wall_times))
 
     handles, labels = axes[0].get_legend_handles_labels()
     fig.legend(handles, labels, framealpha=0, frameon=False, loc="upper center", bbox_to_anchor=(0.5, 1.05), ncol=len(test_folders), columnspacing=0.7, handletextpad=0.29, handlelength=1.0)
@@ -339,7 +422,7 @@ def plot_train_loss_over_iterations_and_wall_time_and_validation_accuracy(test_r
     #plt.show()
     plt.close(fig)
 
-    fig, ax = plt.subplots(1, 1, figsize=get_figsize(wf=0.35, hf=0.35/0.35))
+    fig, ax = plt.subplots(1, 1, figsize=get_figsize(wf=0.35*scaling_factor, hf=0.35/0.35))
 
     for test_folder in test_folders:
         optimizer = get_optimizer(test_folder)
@@ -350,7 +433,7 @@ def plot_train_loss_over_iterations_and_wall_time_and_validation_accuracy(test_r
         ax.plot(df['epoch'][:max_data_point][df['val_acc'] != 0][::skip_val],
                 df['val_acc'][:max_data_point][df['val_acc'] != 0][::skip_val],
                 label=mapping[optimizer][2], color=mapping[optimizer][0],
-                linestyle=mapping[optimizer][1], linewidth=0.7)
+                linestyle=mapping[optimizer][1], linewidth=0.7*scaling_factor)
 
     ax.spines['right'].set_visible(False)
     ax.spines['top'].set_visible(False)
@@ -360,7 +443,7 @@ def plot_train_loss_over_iterations_and_wall_time_and_validation_accuracy(test_r
     ax.set_xlabel(x_label)
     ax.set_ylabel('validation acc.')
     plt.subplots_adjust(top=0.86, bottom=0.28, left=0.32, right=0.99, wspace=0.2)
-    plt.savefig(output_folder + 'audioset_fosi_vs_base_val_acc.pdf')
+    plt.savefig(output_folder + 'audioset_fosi_vs_base_val_acc' + suffix)
     #plt.show()
     plt.close(fig)
 
@@ -382,26 +465,40 @@ if __name__ == "__main__":
 
     plot_train_loss_over_iterations_and_wall_time(root_result_folder + 'test_results_transfer_learning_cifar10/', 'transfer_learning_fosi_vs_base.pdf', 0.8)
 
-    plot_train_loss_over_iterations_and_wall_time(root_result_folder + 'test_results_rnn_shakespeare/', 'rnn_shakespeare_fosi_vs_base.pdf', 2.4, max_data_point=71, x_label='iteration')
+    plot_train_loss_over_iterations_and_wall_time(root_result_folder + 'test_results_rnn_shakespeare/', 'rnn_shakespeare_fosi_vs_base.pdf', 2.4, x_label='iteration')
     '''
 
     plot_train_loss_over_iterations_and_wall_time_and_validation_loss(root_result_folder + 'test_results_logistic_regression_mnist/', 'mnist_fosi_vs_base_train_val.png', 0.3)
     plot_train_loss_over_iterations_and_wall_time_and_validation_loss(root_result_folder + 'test_results_logistic_regression_mnist/', 'mnist_fosi_vs_base_train_val.pdf', 0.3)
+    plot_train_loss_over_iterations_and_wall_time_and_validation_loss(root_result_folder + 'test_results_logistic_regression_mnist/', 'mnist_fosi_vs_base_train_val.pdf', 0.3, b_second_order_algos=True)
 
     # L-BFGS diverges for any history_size at the first epoch, therefore not included
     plot_train_loss_over_iterations_and_wall_time_and_validation_loss(root_result_folder + 'test_results_autoencoder_cifar10/', "autoencoder_cifar10_fosi_vs_base_train_val_128.png", y_top_lim=60)
     plot_train_loss_over_iterations_and_wall_time_and_validation_loss(root_result_folder + 'test_results_autoencoder_cifar10/', "autoencoder_cifar10_fosi_vs_base_train_val_128.pdf", y_top_lim=60)
+    plot_train_loss_over_iterations_and_wall_time_and_validation_loss(root_result_folder + 'test_results_autoencoder_cifar10/', "autoencoder_cifar10_fosi_vs_base_train_val_128.pdf", y_top_lim=60, b_second_order_algos=True)
 
     # L-BFGS not included since its performance is bad (its loss is an order of magnitude larger and it runs 8x times slower) and distorts the figure
     plot_train_loss_over_iterations_and_wall_time_and_validation_loss(root_result_folder + 'test_results_transfer_learning_cifar10/', 'transfer_learning_fosi_vs_base_train_val.png', 0.8)
     plot_train_loss_over_iterations_and_wall_time_and_validation_loss(root_result_folder + 'test_results_transfer_learning_cifar10/', 'transfer_learning_fosi_vs_base_train_val.pdf', 0.8)
+    plot_train_loss_over_iterations_and_wall_time_and_validation_loss(root_result_folder + 'test_results_transfer_learning_cifar10/', 'transfer_learning_fosi_vs_base_train_val.pdf', 0.8, b_second_order_algos=True)
 
     # K-FAC throws exception for RNN.
-    plot_train_loss_over_iterations_and_wall_time_and_validation_loss(root_result_folder + 'test_results_rnn_shakespeare/', 'rnn_shakespeare_fosi_vs_base_train_val.png', 3.5,  max_data_point=71, x_label='iteration')
-    plot_train_loss_over_iterations_and_wall_time_and_validation_loss(root_result_folder + 'test_results_rnn_shakespeare/', 'rnn_shakespeare_fosi_vs_base_train_val.pdf', 3.5, max_data_point=71, x_label='iteration')
+    plot_train_loss_over_iterations_and_wall_time_and_validation_loss(root_result_folder + 'test_results_rnn_shakespeare/', 'rnn_shakespeare_fosi_vs_base_train_val.png', 2.7,  x_label='iteration')
+    plot_train_loss_over_iterations_and_wall_time_and_validation_loss(root_result_folder + 'test_results_rnn_shakespeare/', 'rnn_shakespeare_fosi_vs_base_train_val.pdf', 2.7, x_label='iteration')
+    plot_train_loss_over_iterations_and_wall_time_and_validation_loss(root_result_folder + 'test_results_rnn_shakespeare/', 'rnn_shakespeare_fosi_vs_base_train_val.pdf', 2.7, x_label='iteration', b_second_order_algos=True)
 
     plot_train_loss_over_iterations_and_wall_time_and_validation_loss(root_result_folder + 'test_results_mobilenet_audioset/', 'audioset_fosi_vs_base_train_val.png', 0.035, y_bottom_lim=0.013, skip_val=5)
     plot_train_loss_over_iterations_and_wall_time_and_validation_loss(root_result_folder + 'test_results_mobilenet_audioset/', 'audioset_fosi_vs_base_train_val.pdf', 0.035, y_bottom_lim=0.013, skip_val=5)
+    plot_train_loss_over_iterations_and_wall_time_and_validation_loss(root_result_folder + 'test_results_mobilenet_audioset/', 'audioset_fosi_vs_base_train_val.pdf', 0.035, y_bottom_lim=0.013, skip_val=5, b_second_order_algos=True)
 
     plot_loss_and_accuracy_for_mobilenet(root_result_folder + 'test_results_mobilenet_audioset/', 'audioset_fosi_vs_base_train_val_acc.pdf', 0.03, y_bottom_lim=0.013, skip_val=5)
+    plot_loss_and_accuracy_for_mobilenet(root_result_folder + 'test_results_mobilenet_audioset/', 'audioset_fosi_vs_base_train_val_acc.png', 0.03, y_bottom_lim=0.013, skip_val=5)
     plot_train_loss_over_iterations_and_wall_time_and_validation_accuracy(root_result_folder + 'test_results_mobilenet_audioset/', 'audioset_fosi_vs_base_train_val_losses.pdf', 0.025, y_bottom_lim=0.013, skip_val=5)
+    plot_train_loss_over_iterations_and_wall_time_and_validation_accuracy(root_result_folder + 'test_results_mobilenet_audioset/', 'audioset_fosi_vs_base_train_val_losses.png', 0.025, y_bottom_lim=0.013, skip_val=5)
+
+    # Only FOSI-HB, K-FAC, and L-BFGS
+    plot_train_valid_loss_over_wall_sec_ord(root_result_folder + 'test_results_logistic_regression_mnist/', 'logistic_regression_mnist_second_order.pdf', 0.3, b_second_order_algos=True)
+    plot_train_valid_loss_over_wall_sec_ord(root_result_folder + 'test_results_autoencoder_cifar10/', 'autoencoder_cifar10_second_order.pdf', 60, b_second_order_algos=True)
+    plot_train_valid_loss_over_wall_sec_ord(root_result_folder + 'test_results_transfer_learning_cifar10/', 'transfer_learning_cifar10_second_order.pdf', 0.8, b_second_order_algos=True)
+    plot_train_valid_loss_over_wall_sec_ord(root_result_folder + 'test_results_rnn_shakespeare/', 'rnn_shakespeare_second_order.pdf', 2.7, b_second_order_algos=True)
+    plot_train_valid_loss_over_wall_sec_ord(root_result_folder + 'test_results_mobilenet_audioset/', 'mobilenet_audioset_second_order.pdf', 0.035, b_second_order_algos=True, skip_val=5)

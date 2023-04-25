@@ -222,11 +222,14 @@ class TrainerModule:
         params = self.model.init(init_rng, self.exmp_imgs)['params']
 
         # Initialize learning rate schedule and optimizer
-        print("len(train_loader)", len(train_loader))
+        self.iter_n = len(train_loader)
+        print("len(train_loader)", self.iter_n)
+
+        self.optimizer_ = get_optimizer(self.conf, self.loss_fn, next(iter(train_loader)), b_call_ese_internally=False)
 
         optimizer = optax.chain(
             optax.clip(1.0),  # Clip gradients at 1
-            get_optimizer(self.conf, self.loss_fn, next(iter(train_loader)))
+            self.optimizer_
         )
 
         # Initialize training state
@@ -256,7 +259,10 @@ class TrainerModule:
     def train_epoch(self, epoch):
         # Train model for one epoch, and log avg loss
         losses = []
-        for batch in train_loader:
+        for batch_i, batch in enumerate(train_loader):
+            if "fosi" in optimizer_name and max(1, (epoch * self.iter_n + batch_i) + 1 - self.conf["num_warmup_iterations"]) % self.conf["num_iterations_between_ese"] == 0:
+                fosi_opt_state = self.optimizer_.update_ese(self.state.params, self.state.opt_state[1])
+                self.state = self.state.replace(opt_state=(self.state.opt_state[0], fosi_opt_state))
             self.state, loss = self.train_step(self.state, batch)
             losses.append(loss)
         losses_np = np.stack(jax.device_get(losses))

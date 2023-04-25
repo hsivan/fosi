@@ -180,7 +180,7 @@ def main(optimizer_name):
     rng = hk.PRNGSequence(SEED)
     initial_params = params_init(next(rng), next(train_data))
 
-    optimizer = get_optimizer(conf, loss_fn, next(train_data))
+    optimizer = get_optimizer(conf, loss_fn, next(train_data), b_call_ese_internally=False)
     initial_opt_state = optimizer.init(initial_params)
     state = TrainingState(params=initial_params, opt_state=initial_opt_state)
 
@@ -201,6 +201,11 @@ def main(optimizer_name):
 
         # Do a batch of SGD.
         train_batch = next(train_data)
+
+        if "fosi" in optimizer_name and max(1, step + 1 - conf["num_warmup_iterations"]) % conf["num_iterations_between_ese"] == 0:
+            new_opt_state = optimizer.update_ese(state.params, state.opt_state)
+            state = TrainingState(params=state.params, opt_state=new_opt_state)
+
         state = update(state, train_batch)
 
         # Periodically generate samples.

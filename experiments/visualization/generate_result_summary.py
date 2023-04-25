@@ -24,7 +24,7 @@ def create_loss_summary_table(test_result_root_folders, dataset_type='val'):
         for test_folder in test_folders:
             df = pd.read_csv(test_folder + '/train_stats.csv')
 
-            max_data_point = len(df) if task != 'LM' else 71
+            max_data_point = len(df)
 
             loss = df[dataset_type + '_loss'][:max_data_point].values[-1]
             if 'results_momentum' in test_folder:
@@ -80,7 +80,7 @@ def create_wall_time_to_loss_summary_table(dataset_type='val'):
             df_base = pd.read_csv(base_test_folder + '/train_stats.csv')
             df_fosi = pd.read_csv(fosi_test_folder + '/train_stats.csv')
 
-            max_data_point = len(df_base) if task != 'LM' else 71
+            max_data_point = len(df_base)
 
             base_losses = df_base[dataset_type + '_loss'][:max_data_point][df_base[dataset_type +'_loss'] != 0].values
             min_loss_base_idx = np.argmin(base_losses)
@@ -92,6 +92,7 @@ def create_wall_time_to_loss_summary_table(dataset_type='val'):
             min_loss_fosi_idx = np.argmin(fosi_losses)
             fosi_wall_times = df_fosi['wall_time'][:max_data_point][df_fosi[dataset_type + '_loss'] != 0].values
             min_loss_fosi_wall_time = fosi_wall_times[min_loss_fosi_idx]
+            min_loss_fosi_wall_time = np.inf
 
             # Find the first index where FOSI's loss is a good as min_loss_base
             for idx, fosi_loss in enumerate(fosi_losses):
@@ -106,7 +107,10 @@ def create_wall_time_to_loss_summary_table(dataset_type='val'):
                 min_loss_fosi_wall_time = r'\textbf{' + str(int(min_loss_fosi_wall_time)) + '}'
             else:
                 min_loss_base_wall_time = r'\textbf{' + str(int(min_loss_base_wall_time)) + '}'
-                min_loss_fosi_wall_time = str(int(min_loss_fosi_wall_time))
+                if min_loss_fosi_wall_time == np.inf:
+                    min_loss_fosi_wall_time = str(min_loss_fosi_wall_time)
+                else:
+                    min_loss_fosi_wall_time = str(int(min_loss_fosi_wall_time))
 
             if optimizer_technique == 'adam':
                 adam_min_loss_wall_time = min_loss_base_wall_time
@@ -151,7 +155,7 @@ def create_wall_time_to_acc_summary_table(dataset_type='val'):
             df_base = pd.read_csv(base_test_folder + '/train_stats.csv')
             df_fosi = pd.read_csv(fosi_test_folder + '/train_stats.csv')
 
-            max_data_point = len(df_base) if task != 'LM' else 71
+            max_data_point = len(df_base)
 
             column = dataset_type + '_acc' if dataset_type + '_acc' in df_base.columns else dataset_type + '_loss'
 
@@ -170,7 +174,7 @@ def create_wall_time_to_acc_summary_table(dataset_type='val'):
             else:
                 min_loss_fosi_idx = np.argmin(fosi_losses)
             fosi_wall_times = df_fosi['wall_time'][:max_data_point][df_fosi[column] != 0].values
-            min_loss_fosi_wall_time = fosi_wall_times[min_loss_fosi_idx]
+            min_loss_fosi_wall_time = np.inf
 
             # Find the first index where FOSI's loss is a good as min_loss_base
             for idx, fosi_loss in enumerate(fosi_losses):
@@ -191,7 +195,10 @@ def create_wall_time_to_acc_summary_table(dataset_type='val'):
                 min_loss_fosi_wall_time = r'\textbf{' + str(int(min_loss_fosi_wall_time)) + '}'
             else:
                 min_loss_base_wall_time = r'\textbf{' + str(int(min_loss_base_wall_time)) + '}'
-                min_loss_fosi_wall_time = str(int(min_loss_fosi_wall_time))
+                if min_loss_fosi_wall_time == np.inf:
+                    min_loss_fosi_wall_time = str(min_loss_fosi_wall_time)
+                else:
+                    min_loss_fosi_wall_time = str(int(min_loss_fosi_wall_time))
 
             if optimizer_technique == 'adam':
                 adam_min_loss = min_loss_base
@@ -203,11 +210,16 @@ def create_wall_time_to_acc_summary_table(dataset_type='val'):
                 fosi_momentum_min_loss_wall_time = min_loss_fosi_wall_time
 
         with open(wall_time_summary_file_name, 'a') as f:
-            f.write(task + " & " +
-                    momentum_min_loss_wall_time + " & " + fosi_momentum_min_loss_wall_time + ' (' + '%0.3f' % momentum_min_loss + ')' + " & " +
-                    adam_min_loss_wall_time + " & " + fosi_adam_min_loss_wall_time + ' (' + '%0.3f' % adam_min_loss + ')' + r' \\' + "\n")
+            if 'acc' in column:
+                f.write(task + " & " +
+                        momentum_min_loss_wall_time + " & " + fosi_momentum_min_loss_wall_time + ' & (' + '%0.1f' % (momentum_min_loss*100) + '\%)' + " & " +
+                        adam_min_loss_wall_time + " & " + fosi_adam_min_loss_wall_time + ' & (' + '%0.1f' % (adam_min_loss*100) + '\%)' + r' \\' + "\n")
+            else:
+                f.write(task + " & " +
+                        momentum_min_loss_wall_time + " & " + fosi_momentum_min_loss_wall_time + ' & (' + '%0.2f' % momentum_min_loss + ')' + " & " +
+                        adam_min_loss_wall_time + " & " + fosi_adam_min_loss_wall_time + ' & (' + '%0.2f' % adam_min_loss + ')' + r' \\' + "\n")
             if task != "LR":
-                f.write(r'\cmidrule(r){1-5}' + "\n")
+                f.write(r'\cmidrule(r){1-7}' + "\n")
 
     print("############", dataset_type, "time to accuracy ############")
     for optimizer_technique, fosi_improvements in fosi_improvement.items():
