@@ -1,6 +1,6 @@
 import torchvision
 import torchvision.transforms as transforms
-import functorch
+from torch._functorch.make_functional import make_functional_with_buffers
 import torchopt
 import torch
 from torch.utils.data.dataloader import default_collate
@@ -31,6 +31,7 @@ class Net(nn.Module):
         self.conv1 = nn.Conv2d(3, 6, 5)
         self.pool = nn.MaxPool2d(2, 2)
         self.conv2 = nn.Conv2d(6, 16, 5)
+        self.bn = nn.BatchNorm2d(16)
         self.fc1 = nn.Linear(16 * 5 * 5, 120)
         self.fc2 = nn.Linear(120, 84)
         self.fc3 = nn.Linear(84, 10)
@@ -38,6 +39,7 @@ class Net(nn.Module):
     def forward(self, x):
         x = self.pool(F.relu(self.conv1(x)))
         x = self.pool(F.relu(self.conv2(x)))
+        x = self.bn(x)
         x = torch.flatten(x, 1)  # flatten all dimensions except batch
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
@@ -46,17 +48,17 @@ class Net(nn.Module):
 
 
 net = Net().to(device)
-model, params = functorch.make_functional(net)
+model, params, buffers = make_functional_with_buffers(net)
 
 
 def loss_fn(params, batch):
-    preds = model(params, batch[0])
+    preds = model(params, buffers, batch[0])
     loss = nn.CrossEntropyLoss()(preds, batch[1])
     return loss
 
 
 def accuracy(params, batch):
-    preds = model(params, batch[0])
+    preds = model(params, buffers, batch[0])
     predicted_class = torch.argmax(preds, dim=1)
     return torch.sum(predicted_class == batch[1])
 

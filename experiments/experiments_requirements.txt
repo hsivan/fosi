@@ -10,17 +10,17 @@
 
 # Installs JAX's wheel compatible with CUDA 11 and cuDNN 8.2 or newer
 #-f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
-jax[cuda11_cudnn86]==0.4.2
+jax[cuda11_cudnn82]==0.3.25
 optax==0.1.4
-functorch==0.2.1
-torchopt==0.5.0.post4
-torch==1.12.1
+functorch==2.0.0
+torchopt==0.7.0
+torch==2.0.1
 
 # Packages for the experiments
 tensorflow==2.11.0
 tensorflow-datasets==4.7.0
 dm-haiku==0.0.9
-torchvision==0.13.1
+torchvision==0.15.2
 matplotlib==3.6.2
 flax==0.6.3
 pandas==1.5.2

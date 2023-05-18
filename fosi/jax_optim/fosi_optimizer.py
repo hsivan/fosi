@@ -52,7 +52,7 @@ class GradientTransformationFosi(NamedTuple):
 
 class ScaleByFosiState(NamedTuple):
     base_opt_state: OptState
-    velocity: Params
+    velocity: jnp.ndarray
     count: jnp.ndarray
     k_learning_rates: jnp.ndarray
     k_eigenvecs: jnp.ndarray
@@ -102,37 +102,26 @@ def scale_by_fosi(
             return _approx_learning_rates_and_eigenvectors(params, state, batch)
 
     def _appprox_newton_direction(g1, k_eigenvecs, k_learning_rates):
-        flatten_grad, unravel = ravel_pytree(g1)
-
-        # Compute coeffs (size of the gradient projection on the k leading eigenvectors)
-        coeffs = k_eigenvecs @ flatten_grad
-
         # Compute newton_direction (sum of gradient projections on leading eigenvectors scaled by eigenvalues)
         # and batch_gradients (residual of the gradient)
-        newton_direction = jnp.dot(k_learning_rates * coeffs, k_eigenvecs)
-        newton_direction = unravel(newton_direction)
-
+        newton_direction = jnp.dot(k_learning_rates * jnp.dot(k_eigenvecs, g1), k_eigenvecs)
         return newton_direction
 
     def _orthogonalize_vector_wrt_eigenvectors(v, k_eigenvecs):
-        v, unravel = ravel_pytree(v)
         v = v - jnp.dot(jnp.dot(k_eigenvecs, v), k_eigenvecs)
-        v = unravel(v)
         return v
 
     def _get_g1_and_g2(g, k_eigenvecs):
-        g, unravel = ravel_pytree(g)
         g1 = jnp.dot(jnp.dot(k_eigenvecs, g), k_eigenvecs)  # g1 is the sum of g's projections on k_eigenvecs
         g2 = g - g1  # g2 is orthogonal to g1 and is the sum of g's projection on the rest of the eigenvectors
-        g1 = unravel(g1)
-        g2 = unravel(g2)
         return g1, g2
 
     def init_fn(params):
-        num_params = ravel_pytree(params)[0].shape[0]
-        base_opt_state = base_optimizer.init(params)
+        flatten_param = ravel_pytree(params)[0]
+        num_params = flatten_param.shape[0]
+        base_opt_state = base_optimizer.init(flatten_param)
 
-        velocity = jax.tree_map(lambda t: jnp.zeros_like(t, dtype=accumulator_dtype), params)
+        velocity = jnp.zeros(num_params, dtype=accumulator_dtype)
         count = jnp.zeros([], jnp.int32)
         k_learning_rates = jnp.array([0.0] * (approx_k + approx_l), dtype=jnp.float32)
         k_eigenvecs = jnp.zeros((approx_k + approx_l, num_params), dtype=jnp.float32)
@@ -168,27 +157,31 @@ def scale_by_fosi(
                 lambda x, y: _approx_learning_rates_and_eigenvectors(x, y, batch),
                 lambda x, y: y, params, state)
 
-        g1, g2 = _get_g1_and_g2(updates, state.k_eigenvecs)
+        g, unravel = ravel_pytree(updates)
+        flatten_param = ravel_pytree(params)[0]
 
-        new_velocity = jax.tree_map(momentum_func, g1, state.velocity)
+        # TODO: support weight decay. Weight decay should be added to the loss directly, rather than indirectly through
+        # adding weight_decay*g to g. The reason is that by adding indirectly, it is added twice - by FOSI and by the
+        # base optimizer.
+
+        g1, g2 = _get_g1_and_g2(g, state.k_eigenvecs)
+
+        new_velocity = momentum_func(g1, state.velocity)
         # Cast the tree to accumulator_dtype
-        new_velocity = new_velocity if accumulator_dtype is None else jax.tree_map(lambda t: t.astype(accumulator_dtype), new_velocity)
+        new_velocity = new_velocity if accumulator_dtype is None else new_velocity.astype(accumulator_dtype)
 
         newton_direction = _appprox_newton_direction(new_velocity, state.k_eigenvecs, state.k_learning_rates)
 
-        base_opt_deltas, new_base_opt_state = base_optimizer.update(g2, state.base_opt_state, params)
+        base_opt_deltas, new_base_opt_state = base_optimizer.update(g2, state.base_opt_state, flatten_param)
 
         # Reduce from base_opt_deltas its projection on k_eigenvecs, which makes base_opt_deltas orthogonal to
         # k_eigenvecs as well as to newton_direction (which is a linear combination of k_eigenvecs).
         base_opt_deltas = _orthogonalize_vector_wrt_eigenvectors(base_opt_deltas, state.k_eigenvecs)
 
-        # Scale base_opt_deltas by a clipped factor k_learning_rates[approx_l] / k_learning_rates[-1]
-        base_opt_deltas = jax.tree_map(lambda x: x * state.scaling_factor, base_opt_deltas)
-
         alpha_val = alpha(state.count) if callable(alpha) else alpha
 
         # base_opt_deltas already negated, therefore in the update it appears without the minus sign
-        updates = jax.tree_map(lambda x, y: x - alpha_val * y, base_opt_deltas, newton_direction)
+        updates = unravel(state.scaling_factor * base_opt_deltas - alpha_val * newton_direction)
         count_inc = safe_int32_increment(state.count)
         return updates, ScaleByFosiState(base_opt_state=new_base_opt_state, velocity=new_velocity, count=count_inc,
                                          k_learning_rates=state.k_learning_rates, k_eigenvecs=state.k_eigenvecs, scaling_factor=state.scaling_factor)

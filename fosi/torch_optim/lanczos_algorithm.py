@@ -1,31 +1,7 @@
 import torch
-from functorch import jvp, grad
 
 
-def ravel(vec):
-    views = []
-    for p in vec:
-        view = p.view(-1)
-        views.append(view)
-    return torch.cat(views, 0)
-
-
-def _zeros_like(ref, device):
-    return tuple([torch.zeros_like(p, memory_format=torch.contiguous_format, device=device) for p in ref])
-
-
-def unravel(vec, ref, device):
-    vec_unravel = _zeros_like(ref, device)
-    offset = 0
-    for p in vec_unravel:
-        numel = p.numel()
-        # view as to avoid deprecated pointwise semantics
-        p.copy_(vec[offset:offset + numel].view_as(p))
-        offset += numel
-    return vec_unravel
-
-
-def lanczos_alg(order, loss, k_largest, l_smallest=0, return_precision='32', device=torch.device("cpu")):
+def lanczos_alg(order, loss, k_largest, l_smallest=0, return_precision='32', device=None):
     """
     Lanczos algorithm for tridiagonalizing a real symmetric matrix, using full reorthogonalization.
     This function returns a function that performs the Lanczos iterations and can be jitted.
@@ -42,7 +18,27 @@ def lanczos_alg(order, loss, k_largest, l_smallest=0, return_precision='32', dev
 
     # The algorithm must run in high precision; however, after extracting the eigenvalues and eigenvectors we can
     # cast it back to 32 bit.
-    # TODO: use torch.float64 as dtype
+
+    if device is None and torch.cuda.is_available():
+        device = torch.device("cuda")
+    else:
+        device = torch.device("cpu")
+
+    def hvp(params, vec, batch) -> torch.Tensor:
+        """
+        Computes the Hessian-vector product for a mini-batch from the dataset.
+        Should not use functorch as it does not support batch norm: https://pytorch.org/functorch/stable/batch_norm.html
+        """
+        # Compute original gradient, tracking computation graph
+        loss_val = loss(params, batch)
+        grad_dict = torch.autograd.grad(loss_val, params, create_graph=True)
+        grad_vec = torch.cat([g.contiguous().view(-1) for g in grad_dict]).to(device)
+
+        # Take the second gradient and mult with vec, Hv
+        hessian_vec_prod_dict = torch.autograd.grad(grad_vec, params, grad_outputs=vec, only_inputs=True)
+        # concatenate the results over the different components of the network
+        hessian_vec_prod = torch.cat([g.contiguous().view(-1) for g in hessian_vec_prod_dict])
+        return hessian_vec_prod
 
     def orthogonalization(vecs, w, tridiag, i):
         # Full reorthogonalization.
@@ -75,11 +71,9 @@ def lanczos_alg(order, loss, k_largest, l_smallest=0, return_precision='32', dev
 
         # Assign to w the Hessian vector product Hv. Uses forward-over-reverse mode for computing Hv.
         # We assume here that the default precision is 32 bit.
-        v_not_flat = unravel(v, params, device) if return_precision == '64' else unravel(v.type(torch.float32), params, device)  # convert v to the param tree structure
-        loss_fn = lambda x: loss(x, batch)
-        hessian_vp = jvp(grad(loss_fn), (params,), (v_not_flat,))[1]  # hvp(loss_fn, params, v_not_flat)[1]
-        w = ravel(hessian_vp)
-        w = w.type(torch.float64)
+        v_ = v if return_precision == '64' else v.type(torch.float32)
+        w = hvp(params, v_, batch)
+        w = w.to(device=device, dtype=torch.float64)
 
         # Evaluates alpha and update tridiag diagonal with alpha
         alpha = torch.dot(w, v)
@@ -112,7 +106,7 @@ def lanczos_alg(order, loss, k_largest, l_smallest=0, return_precision='32', dev
         """
 
         # Initialization
-        params_flatten = ravel(params)
+        params_flatten = torch.nn.utils.parameters_to_vector(params)
         num_params = params_flatten.shape[0]
         tridiag = torch.zeros((order, order), dtype=torch.float64).to(device)
         vecs = torch.zeros((order, num_params), dtype=torch.float64).to(device)
@@ -133,8 +127,7 @@ def lanczos_alg(order, loss, k_largest, l_smallest=0, return_precision='32', dev
         l_smallest_eigenvals = eigs_tridiag[:l_smallest].type(precision)
         l_smallest_eigenvecs = (eigvecs_triag.T[:l_smallest] @ vecs).type(precision)
 
+        del vecs, tridiag, eigs_tridiag, eigvecs_triag, params_flatten, init_vec
         return k_largest_eigenvals, k_largest_eigenvecs, l_smallest_eigenvals, l_smallest_eigenvecs
 
     return lanczos_alg_jitted
-
-
