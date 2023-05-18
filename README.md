@@ -189,62 +189,13 @@ More examples can be found in the `examples` folder.
 We provide detailed instructions for reproducing the experiments from our paper.
 The full [instructions](experiments/README.md) and scripts are in the `experiments` folder.
 
-In the paper, we presented the results of five DNN training tasks,
-as depicted in the following figures.
+In the paper, we presented the results of five DNN training tasks.
 Our study involved a comparison of FOSI against various optimization methods,
 including first-order methods Adam and Heavy-Ball (HB) and partially second-order methods K-FAC and L-BFGS.
 We utilized the K-FAC implementation from the [KFAC-JAX](https://github.com/deepmind/kfac-jax) library and the L-BFGS
 implementation from the [JAXopt](https://github.com/google/jaxopt) library.
 As a base optimizer, FOSI employs Adam and HB.
 For further information regarding the experiments, please refer to the paper for the full details.
-
-#### Notes:
-* The optimal results for K-FAC presented bellow were obtained through a grid search over the learning rate and momentum,
-which considered K-FAC's adaptive options, and using adaptive damping.
-* We repeated the experiments for K-FAC with both the default inverse_update_period (*T3* in the K-FAC paper) value,
-which is 5, and with inverse_update_period=800, which is similar to FOSI's *T* used in the experiments.
-We observed that for the specific model architectures we used, K-FAC's latency is dominated by its overhead per iterations,
-rather than the matrix inversion.
-Using inverse_update_period=800 resulted in poor convergence;
-therefore, the results presented here are for the default inverse_update_period value, which resulted in similar
-latency as for inverse_update_period=800 and faster convergence.
-* The optimal results for L-BFGS presented bellow were obtained through a search over L (history size), starting from L=10
-  (similar to *k* we used for FOSI) and up to L=100, except for the Audio Classification for which we only used
-L=10 due to runtime overhead.
-
-| ![](./experiments/visualization/figures/mnist_fosi_vs_base_train_val.png)                                                                                  |
-|:-----------------------------------------------------------------------------------------------------------------------------------------------------------|
-| *Fig.1 - Logistic regression. K-FAC experiences overfitting, while L-BFGS, <br/>despite being executed with L=80 (history size), is not able to converge.* |
-
-| ![](./experiments/visualization/figures/transfer_learning_fosi_vs_base_train_val.png)                                                                                                                                                                                                                                           |
-|:--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| *Fig.2 - Transfer learning. Excluding L-BFGS (L=40) due to its poor <br/>performance, which includes a significantly larger loss than other <br/>optimizers and 8x slower wall time that distorts the figure. <br/>Despite using the best learning rate and momentum after grid <br/>search, K-FAC converges slower than FOSI.* |
-
-| ![](./experiments/visualization/figures/autoencoder_cifar10_fosi_vs_base_train_val_128.png)                                                                                                                                              |
-|:-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| *Fig.3 - Autoencoder. Excluding L-BFGS due to divergence at the <br/>first epoch for any L<=100 (history size). Although K-FAC converges <br/>faster than FOSI-HB, the latter achieves a lower validation loss and is <br/>more stable.* |
-
-| ![](./experiments/visualization/figures/rnn_shakespeare_fosi_vs_base_train_val.png)                                                                   |
-|:------------------------------------------------------------------------------------------------------------------------------------------------------|
-| *Fig.4 - Language model. Excluding K-FAC due to integration issues <br/>with RNN. L-BFGS (L=80) converges to poor minima and is <br/>considerably slower.* |
-
-| ![](./experiments/visualization/figures/audioset_fosi_vs_base_train_val.png)                                                                    |
-|:------------------------------------------------------------------------------------------------------------------------------------------------|
-| *Fig.5 - Audio classification. K-FAC converges slower than FOSI-HB and <br/>exhibits worse overfitting, while L-BFGS (L=10) does not converge.* |
-
-
-The following figures demonstrate the difference between Adam and FOSI-Adam for different learning rates and momentum
-values b1, and b2 when applied to quadratic function.
-For more details regarding the experiment setting, see Appendix I in the paper.
-
-| ![](./experiments/visualization/figures/quadratic_jax_kappa_zeta_lr_momentum_single_func_adam.png)                                                                                                                                                                                                                  |
-|:--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| *Fig.6 - Learning rate impact. Left: using different learning rates with <br/>fixed momentum values, b1=0.9 and b2=0.999. Right: using different <br/>learning rates and for each learning rate using the best b1 in [0.7, 1) <br/>and fixed b2=0.999. FOSI-Adam improves the baseline's convergence <br/>in each case.* |
-
-| ![](./experiments/visualization/figures/quadratic_jax_kappa_zeta_momentum_single_func_adam.png)                                                                                                 |
-|:------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| *Fig.7 - Using different b1 values for three different b2 values and <br/>fixed learning rate 0.05. In most cases, FOSI-Adam either improves <br/>or does not harm the baseline’s convergence.* |
-
 
 ## Citing FOSI
 

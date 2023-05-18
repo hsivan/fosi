@@ -16,6 +16,7 @@ from torchvision.datasets import CIFAR10
 import torch
 import jax
 from jax import random
+from jax.flatten_util import ravel_pytree
 from flax import linen as nn
 from flax.training import train_state
 import optax
@@ -184,7 +185,7 @@ class TrainerModule:
 
     def __init__(self, c_hid, latent_dim, conf, seed=42):
         super().__init__()
-        self.num_epochs = 200
+        self.num_epochs = conf["num_epochs"]
         self.c_hid = c_hid
         self.latent_dim = latent_dim
         self.conf = conf
@@ -220,6 +221,8 @@ class TrainerModule:
         rng = jax.random.PRNGKey(self.seed)
         rng, init_rng = jax.random.split(rng)
         params = self.model.init(init_rng, self.exmp_imgs)['params']
+        num_params = ravel_pytree(params)[0].shape[0]
+        print("num_params:", num_params)
 
         # Initialize learning rate schedule and optimizer
         self.iter_n = len(train_loader)

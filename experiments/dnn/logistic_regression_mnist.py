@@ -64,8 +64,7 @@ def get_normalized_dataset():
 
 
 def Model(num_classes=10):
-    return stax.serial(
-        Flatten, Dense(num_classes), LogSoftmax)
+    return stax.serial(Flatten, Dense(num_classes), LogSoftmax)
 
 
 def train_mnist(optimizer_name):

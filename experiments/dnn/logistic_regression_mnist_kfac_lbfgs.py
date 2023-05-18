@@ -2,9 +2,6 @@ import os
 # Note: To maintain the default precision as 32-bit and not switch to 64-bit, set the following flag prior to any
 # imports of JAX. This is necessary as the jax_enable_x64 flag is later set to True inside the Lanczos algorithm.
 # See: https://github.com/google/jax/issues/8178
-
-from experiments.dnn.logistic_regression_mnist import get_normalized_dataset, Model, data_generator
-
 os.environ['JAX_DEFAULT_DTYPE_BITS'] = '32'
 
 import csv
@@ -15,12 +12,20 @@ from timeit import default_timer as timer
 import jax.numpy as jnp
 from jax import random
 from jax import jit
+from jax.example_libraries import stax
+from jax.example_libraries.stax import Dense, Flatten
 import kfac_jax
 import jaxopt
 
 from experiments.dnn.dnn_test_utils import start_test, get_config, write_config_to_file
+from experiments.dnn.logistic_regression_mnist import get_normalized_dataset, data_generator
 
 print(jax.local_devices())
+
+
+# Must return the logits for K-FAC
+def Model(num_classes=10):
+    return stax.serial(Flatten, Dense(num_classes))
 
 
 def train_mnist(optimizer_name, learning_rate, momentum):
