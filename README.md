@@ -161,7 +161,7 @@ data_gen = data_generator(target_params, n_dim)
 
 # Construct the FOSI-Adam optimizer. The usage after construction is identical to that of TorchOpt optimizers,
 # with the optimizer.init() and optimizer.update() methods.
-optimizer = fosi_adam_torch(torchopt.adam(lr=1e-3), loss_fn, next(data_gen), device=device)
+optimizer = fosi_adam_torch(torchopt.adam(lr=1e-3), loss_fn, next(data_gen))
 
 # Initialize the optimizer
 opt_state = optimizer.init(params)

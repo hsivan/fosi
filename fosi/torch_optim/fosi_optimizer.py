@@ -27,8 +27,10 @@ def scale_by_fosi(
         warmup_w: Optional[int] = None,
         alpha: float = 1.0,
         learning_rate_clip: Optional[float] = 3.0,
-        device: torch.device = torch.device("cuda"),
+        device: Optional[torch.device] = None,
 ) -> GradientTransformation:
+    if device is None:
+        device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
     accumulator_dtype = None if accumulator_dtype is None else torch.float32
     warmup_w = warmup_w if warmup_w is not None else num_iters_to_approx_eigs
     ese_fn = get_ese_fn(loss_fn, approx_k, batch, approx_l, device=device)
@@ -121,7 +123,7 @@ def fosi(
         warmup_w: Optional[int] = None,
         alpha: float = 1.0,
         learning_rate_clip: Optional[float] = 3.0,
-        device: torch.device = torch.device("cuda"),
+        device: Optional[torch.device] = None,
 ) -> GradientTransformation:
     return scale_by_fosi(base_optimizer=base_optimizer, momentum_func=momentum_func, loss_fn=loss_fn, batch=batch,
                          accumulator_dtype=accumulator_dtype, num_iters_to_approx_eigs=num_iters_to_approx_eigs,
@@ -140,7 +142,7 @@ def fosi_adam(
         approx_l: int = 0,
         warmup_w: Optional[int] = None,
         alpha: float = 0.1,
-        device: torch.device = torch.device("cpu"),
+        device: Optional[torch.device] = None,
 ) -> GradientTransformation:
     # Note: Adam should use learning_rate_clip = 1.0
     return fosi(base_optimizer, lambda g, t: (1 - decay) * g + decay * t, loss_fn, batch, accumulator_dtype,
@@ -159,7 +161,7 @@ def fosi_momentum(
         warmup_w: Optional[int] = None,
         alpha: float = 0.1,
         learning_rate_clip: Optional[float] = 3.0,
-        device: torch.device = torch.device("cuda"),
+        device: Optional[torch.device] = None,
 ) -> GradientTransformation:
     return fosi(base_optimizer, lambda g, t: g + decay * t, loss_fn, batch, accumulator_dtype,
                 num_iters_to_approx_eigs, approx_k, approx_l, warmup_w, alpha, learning_rate_clip, device)
@@ -177,9 +179,10 @@ def fosi_nesterov(
         warmup_w: Optional[int] = None,
         alpha: float = 0.1,
         learning_rate_clip: Optional[float] = 3.0,
+        device: Optional[torch.device] = None,
 ) -> GradientTransformation:
     return fosi(base_optimizer, lambda g, t: (1 + decay) * g + decay**2 * t, loss_fn, batch, accumulator_dtype,
-                num_iters_to_approx_eigs, approx_k, approx_l, warmup_w, alpha, learning_rate_clip)
+                num_iters_to_approx_eigs, approx_k, approx_l, warmup_w, alpha, learning_rate_clip, device)
 
 
 def fosi_sgd(
@@ -193,7 +196,7 @@ def fosi_sgd(
         warmup_w: Optional[int] = None,
         alpha: float = 0.1,
         learning_rate_clip: Optional[float] = 3.0,
-        device: torch.device = torch.device("cpu"),
+        device: Optional[torch.device] = None,
 ) -> GradientTransformation:
     return fosi(base_optimizer, lambda g, t: g, loss_fn, batch, accumulator_dtype,
                 num_iters_to_approx_eigs, approx_k, approx_l, warmup_w, alpha, learning_rate_clip, device)

@@ -24,7 +24,6 @@ EPOCH = 200
 
 
 torch.set_default_dtype(torch.float32)
-device = torch.device("cuda")
 
 
 class BasicBlock(nn.Module):
@@ -352,6 +351,8 @@ if __name__ == '__main__':
         shuffle=False
     )
 
+    print("cifar100_training_loader:", len(cifar100_training_loader))
+
     def piecewise_constant_schedule(
             init_value: Scalar,
             boundaries_and_scales: int,
@@ -375,7 +376,7 @@ if __name__ == '__main__':
     base_optimizer = torchopt.sgd(lr=piecewise_constant_schedule(args.lr, boundaries_and_scales), momentum=0.9, weight_decay=0)
     batch = next(iter(cifar100_training_loader))
     batch = (batch[0].cuda(), batch[1].cuda())
-    optimizer = fosi_momentum_torch(base_optimizer, loss_function, batch, num_iters_to_approx_eigs=800, alpha=0.01, device=device, approx_k=10, learning_rate_clip=2)
+    optimizer = fosi_momentum_torch(base_optimizer, loss_function, batch, num_iters_to_approx_eigs=800, alpha=0.01, approx_k=10, learning_rate_clip=2)
     opt_state = optimizer.init(params)
 
     input_tensor = torch.Tensor(1, 3, 32, 32)

@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 
 from lanczos_algorithm import lanczos_alg
 
-torch.set_default_dtype(torch.float32)
+torch.set_default_dtype(torch.float64)
 
 
 def lanczos_algorithm_test():
@@ -76,7 +76,7 @@ def lanczos_algorithm_test():
     largest_k = 10
     smallest_k = 3
     lanczos_order = 100
-    hvp_cl = lanczos_alg(lanczos_order, loss_fn, lanczos_order)  # Return all lanczos_order eigen products
+    hvp_cl = lanczos_alg(lanczos_order, loss_fn, lanczos_order, return_precision='64')  # Return all lanczos_order eigen products
 
     # compute the full hessian
     hessian = full_hessian(loss_fn, params, b)
@@ -104,7 +104,7 @@ def lanczos_algorithm_test():
         if i == 0:
             fig, ax = plt.subplots(1, 1)
             eigs_true_edges = torch.concat((eigs_true[:lanczos_order//2], eigs_true[-lanczos_order//2:]))
-            ax.plot(range(eigs_lanczos.shape[0]), torch.abs(eigs_true_edges - eigs_lanczos).cpu() / torch.abs(eigs_true_edges).cpu())
+            ax.plot(range(eigs_lanczos.shape[0]), torch.abs(eigs_true_edges - eigs_lanczos).detach().cpu() / torch.abs(eigs_true_edges).detach().cpu())
             ax.set_title("Accuracy of lanczos eigenvalues")
             ax.set_xlabel("eigenvalue index")
             ax.set_ylabel("| eig_true - eig_lanczos | / eig_true")
@@ -140,7 +140,7 @@ def lanczos_eigen_approx_test():
     eigenvalues[1] = 9
     eigenvalues_matrix = torch.zeros_like(eigenvectors)
     fill_diagonal(eigenvalues_matrix, eigenvalues)
-    hessian = eigenvectors.T @ eigenvalues_matrix @ eigenvectors
+    hessian = (eigenvectors.T @ eigenvalues_matrix @ eigenvectors).to(device)
 
     eigs_true, eigvecs_true = torch.linalg.eigh(hessian)
     eigs_true, eigvecs_true = eigs_true.to(device), eigvecs_true.to(device)
@@ -151,9 +151,9 @@ def lanczos_eigen_approx_test():
     x_initial = torch.ones(n_dim) * 0.5
     x_initial[1] = 1.0
     x_initial = x_initial @ eigenvectors
-    x_initial = Variable(x_initial.data, requires_grad=True)
+    x_initial = Variable(x_initial.data, requires_grad=True).to(device)
 
-    hvp_cl = lanczos_alg(lanczos_order, objective, lanczos_order)  # Return all lanczos_order eigen products
+    hvp_cl = lanczos_alg(lanczos_order, objective, lanczos_order, return_precision='64')  # Return all lanczos_order eigen products
     eigs_lanczos, eigvecs_lanczos, _, _ = hvp_cl((x_initial,), None)
 
     assert torch.allclose(eigs_true[-largest_k:], eigs_lanczos[-largest_k:], atol=atol_e), print("eigs_true:", eigs_true[-largest_k:], "eigs_lanczos:", eigs_lanczos[-largest_k:])
@@ -169,7 +169,7 @@ def lanczos_eigen_approx_test():
 
     fig, ax = plt.subplots(1, 1)
     eigs_true_edges = torch.cat((eigs_true[:lanczos_order // 2], eigs_true[-lanczos_order // 2:]))
-    ax.plot(range(eigs_lanczos.shape[0]), torch.abs(eigs_true_edges - eigs_lanczos).cpu() / torch.abs(eigs_true_edges).cpu())
+    ax.plot(range(eigs_lanczos.shape[0]), torch.abs(eigs_true_edges - eigs_lanczos).detach().cpu() / torch.abs(eigs_true_edges).detach().cpu())
     ax.set_title("Accuracy of lanczos eigenvalues")
     ax.set_xlabel("eigenvalue index")
     ax.set_ylabel("| eig_true - eig_lanczos | / eig_true")

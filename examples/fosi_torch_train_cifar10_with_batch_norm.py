@@ -64,7 +64,7 @@ def accuracy(params, batch):
 
 
 base_optimizer = torchopt.adam(lr=0.001)  # torchopt.sgd(net.parameters(), lr=0.001, momentum=0.9)
-optimizer = fosi_adam_torch(base_optimizer, loss_fn, next(iter(trainloader)), num_iters_to_approx_eigs=500, alpha=0.01, device=device)
+optimizer = fosi_adam_torch(base_optimizer, loss_fn, next(iter(trainloader)), num_iters_to_approx_eigs=500, alpha=0.01)
 opt_state = optimizer.init(params)
 
 for epoch in range(10):  # loop over the dataset multiple times

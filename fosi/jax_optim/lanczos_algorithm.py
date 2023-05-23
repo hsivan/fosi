@@ -37,7 +37,7 @@ def lanczos_alg(order, loss, rng_key, k_largest, l_smallest=0, return_precision=
         # Otherwise, we will have to iterate/slice by i, which is not supported by jit.
 
         # The operation np.dot(np.dot(vecs, w), vecs) is equivalent to multiply (scale) each vector in its own coeff,
-        # where coeffs = np.dot(vecs, w) is array of coeffs (scalars) with shape (order,), and then sum all the
+        # where coeffs = np.dot(vecs, w) is an array of coeffs (scalars) with shape (order,), and then sum all the
         # scaled vectors.
         w = w - np.dot(np.dot(vecs, w), vecs)  # single vector with the shape of w
         # repeat the full orthogonalization for stability

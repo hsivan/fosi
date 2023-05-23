@@ -1,4 +1,9 @@
 import torch
+from torchopt import pytree
+from torch.autograd import forward_ad
+
+lanczos_precision = torch.float64
+vec_tree = None  # Place holder
 
 
 def lanczos_alg(order, loss, k_largest, l_smallest=0, return_precision='32', device=None):
@@ -19,11 +24,41 @@ def lanczos_alg(order, loss, k_largest, l_smallest=0, return_precision='32', dev
     # The algorithm must run in high precision; however, after extracting the eigenvalues and eigenvectors we can
     # cast it back to 32 bit.
 
-    if device is None and torch.cuda.is_available():
-        device = torch.device("cuda")
-    else:
-        device = torch.device("cpu")
+    if device is None:
+        device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
+    global vec_tree
+    vec_tree = None
+
+    # TODO: Forward mode. Throws 'RuntimeError: ZeroTensors are immutable'. Should resolve this issue and use this hvp.
+    def hvp_forward_ad(params, vec, batch):
+        global vec_tree
+        torch.nn.utils.vector_to_parameters(vec, vec_tree)
+
+        with forward_ad.dual_level():
+            dual_params = pytree.tree_map(lambda a, b: forward_ad.make_dual(a, b), params, vec_tree)
+            loss_val = loss(dual_params, batch)
+            gradient = torch.autograd.grad(loss_val, dual_params)
+            _, hvp = zip(*[forward_ad.unpack_dual(g) for g in gradient])
+
+        hessian_vec_prod = torch.cat([g.contiguous().view(-1) for g in hvp])
+        return hessian_vec_prod
+
+    # Fast but inaccurate. Using 32 bit precision results in lanczos_algorithm_sanity.py failure. Therefore, switched to
+    # 64 precision in the test.
+    def hvp_finite_diff(params, vec, batch) -> torch.Tensor:
+        epsilon = 1e-6
+        global vec_tree
+        torch.nn.utils.vector_to_parameters(vec, vec_tree)
+        input = pytree.tree_map(lambda a, b: a + epsilon * b, params, vec_tree)
+        grad_plus = torch.autograd.grad(loss(input, batch), input)
+        input = pytree.tree_map(lambda a, b: a - epsilon * b, params, vec_tree)
+        grad_minus = torch.autograd.grad(loss(input, batch), input)
+        hessian_vec_prod = pytree.tree_map(lambda a, b: (a - b) / (2 * epsilon), grad_plus, grad_minus)
+        hessian_vec_prod = torch.cat([g.contiguous().view(-1) for g in hessian_vec_prod])
+        return hessian_vec_prod
+
+    # Slow due to backward mode AD constraints. see https://github.com/pytorch/pytorch/issues/24004
     def hvp(params, vec, batch) -> torch.Tensor:
         """
         Computes the Hessian-vector product for a mini-batch from the dataset.
@@ -32,11 +67,10 @@ def lanczos_alg(order, loss, k_largest, l_smallest=0, return_precision='32', dev
         # Compute original gradient, tracking computation graph
         loss_val = loss(params, batch)
         grad_dict = torch.autograd.grad(loss_val, params, create_graph=True)
-        grad_vec = torch.cat([g.contiguous().view(-1) for g in grad_dict]).to(device)
+        grad_vec = torch.cat([g.contiguous().view(-1) for g in grad_dict])
 
         # Take the second gradient and mult with vec, Hv
-        hessian_vec_prod_dict = torch.autograd.grad(grad_vec, params, grad_outputs=vec, only_inputs=True)
-        # concatenate the results over the different components of the network
+        hessian_vec_prod_dict = torch.autograd.grad(grad_vec, params, grad_outputs=vec)
         hessian_vec_prod = torch.cat([g.contiguous().view(-1) for g in hessian_vec_prod_dict])
         return hessian_vec_prod
 
@@ -48,12 +82,12 @@ def lanczos_alg(order, loss, k_largest, l_smallest=0, return_precision='32', dev
         # However, using the iteration on all the vectors enables us to use jit over this function.
         # Otherwise, we will have to iterate/slice by i, which is not supported by jit.
 
-        # The operation torch.dot(torch.dot(vecs, w), vecs) is equivalent to multiply (scale) each vector in its own coeff,
-        # where coeffs = torch.dot(vecs, w) is array of coeffs (scalars) with shape (order,), and then sum all the
+        # The operation (vecs.matmul(w)).matmul(vecs) is equivalent to multiply (scale) each vector in its own coeff,
+        # where coeffs = vecs.matmul(w) is an array of coeffs (scalars) with shape (order,), and then sum all the
         # scaled vectors.
-        w = w - vecs.t().matmul(vecs.matmul(w))  # torch.dot(torch.dot(vecs, w), vecs)  # single vector with the shape of w
+        w = w - (vecs.matmul(w)).matmul(vecs)  # single vector with the shape of w
         # repeat the full orthogonalization for stability
-        w = w - vecs.t().matmul(vecs.matmul(w))  # single vector with the shape of w
+        w = w - (vecs.matmul(w)).matmul(vecs)  # single vector with the shape of w
 
         beta = torch.linalg.norm(w)
 
@@ -72,14 +106,12 @@ def lanczos_alg(order, loss, k_largest, l_smallest=0, return_precision='32', dev
         # Assign to w the Hessian vector product Hv. Uses forward-over-reverse mode for computing Hv.
         # We assume here that the default precision is 32 bit.
         v_ = v if return_precision == '64' else v.type(torch.float32)
-        w = hvp(params, v_, batch)
-        w = w.to(device=device, dtype=torch.float64)
+        w = hvp_finite_diff(params, v_, batch)
+        w = w.to(dtype=lanczos_precision)
 
         # Evaluates alpha and update tridiag diagonal with alpha
         alpha = torch.dot(w, v)
         tridiag[i, i] = alpha
-
-        w = torch.unsqueeze(w, -1)
 
         # For every iteration except the last one, perform full orthogonalization on w and normalized it (beta is w's
         # norm). Update tridiag secondary diagonals with beta and update vecs with the normalized orthogonal w.
@@ -108,11 +140,15 @@ def lanczos_alg(order, loss, k_largest, l_smallest=0, return_precision='32', dev
         # Initialization
         params_flatten = torch.nn.utils.parameters_to_vector(params)
         num_params = params_flatten.shape[0]
-        tridiag = torch.zeros((order, order), dtype=torch.float64).to(device)
-        vecs = torch.zeros((order, num_params), dtype=torch.float64).to(device)
-        init_vec = torch.normal(mean=0.0, std=1.0, size=(num_params,), dtype=torch.float64).to(device)
+        tridiag = torch.zeros((order, order), dtype=lanczos_precision).to(device)
+        vecs = torch.zeros((order, num_params), dtype=lanczos_precision).to(device)
+        init_vec = torch.normal(mean=0.0, std=1.0, size=(num_params,), dtype=lanczos_precision).to(device)
         init_vec = init_vec / torch.linalg.norm(init_vec)
         vecs[0] = init_vec
+        global vec_tree
+
+        if vec_tree is None:
+            vec_tree = pytree.tree_map(lambda t: torch.zeros_like(t), params)
 
         lanczos_iter = lambda i, args: lanczos_iteration(i, args, params, batch)
         # Lanczos iterations.
