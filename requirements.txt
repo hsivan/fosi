@@ -13,4 +13,4 @@ jax[cuda11_cudnn82]==0.3.25
 optax==0.1.4
 functorch==2.0.0
 torchopt==0.7.0
-torch=2.0.1
+torch==2.0.1
