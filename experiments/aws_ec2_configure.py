@@ -150,7 +150,7 @@ def create_keypair(ec2_client, keypair_name):
                 print("Created key-pair", keypair_name)
         else:
             raise
-    # TODO 2: in case there is no local pem file but there is key-pair with this name - delete it and create new one
+    # In case there is no local pem file but there is key-pair with this name - delete it and create new one
     key = paramiko.RSAKey.from_private_key_file(keypair_file_name)
     ssh_client = paramiko.SSHClient()
     ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())

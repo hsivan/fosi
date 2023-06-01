@@ -79,9 +79,11 @@ def scale_by_fosi(
         g = torch.nn.utils.parameters_to_vector(updates)
         flatten_params = torch.nn.utils.parameters_to_vector(params)
 
-        # TODO: support weight decay. Weight decay should be added to the loss directly, rather than indirectly through
-        # adding weight_decay*g to g. The reason is that by adding indirectly, it is added twice - by FOSI and by the
-        # base optimizer.
+        # TODO: Weight decay should be added to the loss directly as an L2 regularization, rather than indirectly
+        #  through the optimizer step, i.e., the optimizer weight_decay must be 0.
+        #  The reason is that using weight_decay indirectly through the optimizer step, and not directly through the
+        #  loss function, results in ESE inaccurate eigenvectors and eigenvalues estimation; the gradient of the loss
+        #  is not the real gradient used for the update step.
 
         g1, g2 = _get_g1_and_g2(g, state.k_eigenvecs)
 

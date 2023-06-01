@@ -30,7 +30,9 @@ def lanczos_alg(order, loss, k_largest, l_smallest=0, return_precision='32', dev
     global vec_tree
     vec_tree = None
 
-    # TODO: Forward mode. Throws 'RuntimeError: ZeroTensors are immutable'. Should resolve this issue and use this hvp.
+    # Forward mode.
+    # TODO: using torch.nn.MSELoss inside the loss function causes 'RuntimeError: ZeroTensors are immutable' when
+    #  calling torch.autograd.grad here.
     def hvp_forward_ad(params, vec, batch):
         global vec_tree
         torch.nn.utils.vector_to_parameters(vec, vec_tree)
@@ -44,8 +46,8 @@ def lanczos_alg(order, loss, k_largest, l_smallest=0, return_precision='32', dev
         hessian_vec_prod = torch.cat([g.contiguous().view(-1) for g in hvp])
         return hessian_vec_prod
 
-    # Fast but inaccurate. Using 32 bit precision results in lanczos_algorithm_sanity.py failure. Therefore, switched to
-    # 64 precision in the test.
+    # Fast but inaccurate approximation. Using 32 bit precision results in lanczos_algorithm_sanity.py failure.
+    # Using 64 precision in the test works.
     def hvp_finite_diff(params, vec, batch) -> torch.Tensor:
         epsilon = 1e-6
         global vec_tree
@@ -59,7 +61,7 @@ def lanczos_alg(order, loss, k_largest, l_smallest=0, return_precision='32', dev
         return hessian_vec_prod
 
     # Slow due to backward mode AD constraints. see https://github.com/pytorch/pytorch/issues/24004
-    def hvp(params, vec, batch) -> torch.Tensor:
+    def hvp_backward_ad(params, vec, batch) -> torch.Tensor:
         """
         Computes the Hessian-vector product for a mini-batch from the dataset.
         Should not use functorch as it does not support batch norm: https://pytorch.org/functorch/stable/batch_norm.html
@@ -106,7 +108,7 @@ def lanczos_alg(order, loss, k_largest, l_smallest=0, return_precision='32', dev
         # Assign to w the Hessian vector product Hv. Uses forward-over-reverse mode for computing Hv.
         # We assume here that the default precision is 32 bit.
         v_ = v if return_precision == '64' else v.type(torch.float32)
-        w = hvp_finite_diff(params, v_, batch)
+        w = hvp_forward_ad(params, v_, batch)
         w = w.to(dtype=lanczos_precision)
 
         # Evaluates alpha and update tridiag diagonal with alpha

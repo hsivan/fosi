@@ -147,7 +147,7 @@ apply_fn, params = functorch.make_functional(model)
 def loss_fn(params, batch):
     x, y = batch
     y_pred = apply_fn(params, x)
-    loss = torch.nn.MSELoss()(y_pred, y)
+    loss = torch.mean((y_pred - batch[1])**2)  # MSE loss
     return loss
 
 def data_generator(target_params, n_dim):

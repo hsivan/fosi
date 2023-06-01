@@ -1,3 +1,4 @@
+# Based on https://github.com/weiaicunzai/pytorch-cifar100
 import argparse
 import csv
 import time
@@ -110,7 +111,7 @@ class ResNet(nn.Module):
         # we use a different input size than the original paper
         # so conv2_x's stride is 1
         self.conv2_x = self._make_layer(block, 64, num_block[0], 1)
-        self.conv3_x = self._make_layer(block, 128, num_block[1], 1)  # <----- TODO: should be stride 2, but with the new torch it throws exeption in torch.autograd.grad(grad_vec, params, grad_outputs=vec, only_inputs=True) in lanczos_algorithm.py
+        self.conv3_x = self._make_layer(block, 128, num_block[1], 2)  # Lanczos default is hvp_forward_ad, however, if switching to hvp_backward_ad should set the stride to 1, as 2 causes exception.
         self.conv4_x = self._make_layer(block, 256, num_block[2], 2)
         self.conv5_x = self._make_layer(block, 512, num_block[3], 2)
         self.avg_pool = nn.AdaptiveAvgPool2d((1, 1))
@@ -247,7 +248,13 @@ def get_test_dataloader(mean, std, batch_size=16, num_workers=2, shuffle=True):
 def loss_function(params, batch):
     outputs = model(params, buffers, batch[0])
     loss = nn.CrossEntropyLoss()(outputs, batch[1])
-    return loss
+    # TODO: Weight decay should be added to the loss directly as an L2 regularization (as done here), rather than
+    #  indirectly through the optimizer step, i.e., the optimizer weight_decay must be 0.
+    #  The reason is that using weight_decay indirectly through the optimizer step, and not directly through the
+    #  loss function, results in ESE inaccurate eigenvectors and eigenvalues estimation; the gradient of the loss
+    #  is not the real gradient used for the update step.
+    l2_norm = weight_decay * 0.5 * sum(p.pow(2.0).sum() for p in params)
+    return loss + l2_norm
 
 
 def loss_function_with_pred(params, batch):
@@ -322,6 +329,8 @@ if __name__ == '__main__':
     parser.add_argument('-lr', type=float, default=0.1, help='initial learning rate')
     args = parser.parse_args()
 
+    weight_decay = 5e-4  # Used inside the loss function
+
     test_folder = start_test("fosi_momentum", test_folder='test_results_resnet_cifar100')
     train_stats_file = test_folder + "/train_stats.csv"
     with open(train_stats_file, 'w') as f:
@@ -355,7 +364,7 @@ if __name__ == '__main__':
 
     def piecewise_constant_schedule(
             init_value: Scalar,
-            boundaries_and_scales: int,
+            boundaries_and_scales: dict,
     ) -> Schedule:
         def schedule(count: Numeric) -> Numeric:
             v = init_value
@@ -372,11 +381,10 @@ if __name__ == '__main__':
     boundaries_and_scales = {int(iter_per_epoch * EPOCH * 0.30): 0.2,
                              int(iter_per_epoch * EPOCH * 0.60): 0.2,
                              int(iter_per_epoch * EPOCH * 0.80): 0.2}
-    #optimizer = torchopt.sgd(lr=piecewise_constant_schedule(args.lr, boundaries_and_scales), momentum=0.9, weight_decay=5e-4)
-    base_optimizer = torchopt.sgd(lr=piecewise_constant_schedule(args.lr, boundaries_and_scales), momentum=0.9, weight_decay=0)
+    base_optimizer = torchopt.sgd(lr=piecewise_constant_schedule(args.lr, boundaries_and_scales), momentum=0.9, weight_decay=0)  # TODO: weight_decay > 0 is not supported. It interfere with FOSI's convergence.
     batch = next(iter(cifar100_training_loader))
     batch = (batch[0].cuda(), batch[1].cuda())
-    optimizer = fosi_momentum_torch(base_optimizer, loss_function, batch, num_iters_to_approx_eigs=800, alpha=0.01, approx_k=10, learning_rate_clip=2)
+    optimizer = fosi_momentum_torch(base_optimizer, loss_function, batch, num_iters_to_approx_eigs=800, alpha=0.01, approx_k=10, learning_rate_clip=1)
     opt_state = optimizer.init(params)
 
     input_tensor = torch.Tensor(1, 3, 32, 32)

@@ -9,6 +9,7 @@ n_dim = 100
 target_params = 0.5
 
 # Single linear layer w/o bias equals inner product between the input and the network parameters
+
 model = torch.nn.Linear(n_dim, 1, bias=False).to(device)
 model.weight.data.fill_(0.0)
 apply_fn, params = functorch.make_functional(model)
@@ -16,7 +17,10 @@ apply_fn, params = functorch.make_functional(model)
 def loss_fn(params, batch):
     x, y = batch
     y_pred = apply_fn(params, x)
-    loss = torch.nn.MSELoss()(y_pred, y)
+    # TODO: using torch.nn.MSELoss causes 'RuntimeError: ZeroTensors are immutable' when calling torch.autograd.grad
+    #  in lanczos_algorithm::hvp_forward_ad()
+    #loss = torch.nn.MSELoss()(y_pred, y)
+    loss = torch.mean((y_pred - batch[1])**2)
     return loss
 
 def data_generator(target_params, n_dim):

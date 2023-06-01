@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 
 from lanczos_algorithm import lanczos_alg
 
-torch.set_default_dtype(torch.float64)
+torch.set_default_dtype(torch.float32)
 
 
 def lanczos_algorithm_test():
@@ -76,7 +76,7 @@ def lanczos_algorithm_test():
     largest_k = 10
     smallest_k = 3
     lanczos_order = 100
-    hvp_cl = lanczos_alg(lanczos_order, loss_fn, lanczos_order, return_precision='64')  # Return all lanczos_order eigen products
+    hvp_cl = lanczos_alg(lanczos_order, loss_fn, lanczos_order, return_precision='32')  # Return all lanczos_order eigen products
 
     # compute the full hessian
     hessian = full_hessian(loss_fn, params, b)
@@ -153,7 +153,7 @@ def lanczos_eigen_approx_test():
     x_initial = x_initial @ eigenvectors
     x_initial = Variable(x_initial.data, requires_grad=True).to(device)
 
-    hvp_cl = lanczos_alg(lanczos_order, objective, lanczos_order, return_precision='64')  # Return all lanczos_order eigen products
+    hvp_cl = lanczos_alg(lanczos_order, objective, lanczos_order, return_precision='32')  # Return all lanczos_order eigen products
     eigs_lanczos, eigvecs_lanczos, _, _ = hvp_cl((x_initial,), None)
 
     assert torch.allclose(eigs_true[-largest_k:], eigs_lanczos[-largest_k:], atol=atol_e), print("eigs_true:", eigs_true[-largest_k:], "eigs_lanczos:", eigs_lanczos[-largest_k:])

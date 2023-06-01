@@ -21,9 +21,9 @@ def _ese(lanczos_alg_gitted, batch, params):
 def get_ese_fn(loss_fn, k_largest, batch=None, l_smallest=0, return_precision='32', b_parallel=False):
     key = jax.random.PRNGKey(0)
     # TODO: the following should be max(4 * (k_largest + l_smallest), 2 * int(log(num_params))), however,
-    # num_params is not available at the time of the construction of the optimizer. Note that log(1e+9) ~= 40,
-    # therefore, for num_params < 1e+9 and k>=10 we have 4 * (k_largest + l_smallest) > 2 * log(num_params).
-    # Hence, 4 * (k_largest + l_smallest) is the maximum in our experiments.
+    #  num_params is not available at the time of the construction of the optimizer. Note that log(1e+9) ~= 40,
+    #  therefore, for num_params < 1e+9 and k>=10 we have 4 * (k_largest + l_smallest) > 2 * log(num_params).
+    #  Hence, 4 * (k_largest + l_smallest) is the maximum in our experiments.
     lanczos_order = 4 * (k_largest + l_smallest)
     lanczos_alg_gitted = lanczos_alg(lanczos_order, loss_fn, key, k_largest, l_smallest, return_precision=return_precision, b_parallel=b_parallel)
 
