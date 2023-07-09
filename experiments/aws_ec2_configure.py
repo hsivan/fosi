@@ -8,7 +8,7 @@ Configures AWS EC2 machine for the experiments. The script does the following:
 - Installs with pip the fosi/experiments/experiments_requirements.txt file and CUDA toolkit
 
 Requirements:
-(1) Python >= 3.9
+(1) Python >= 3.8
 (2) AWS account; after opening the account, the user must create AWS IAM user with
     AdministratorAccess permissions. The full steps to create the IAM user:
         1. In https://console.aws.amazon.com/iam/ select "Users" on the left and press "Add users".
@@ -172,7 +172,7 @@ def create_instance(ec2_client, keypair_name):
         ImageId="ami-00712dae9a53f8c15",  # Ubuntu Server 20.04 LTS (HVM),EBS General Purpose (SSD) Volume Type - ami-00712dae9a53f8c15 (64-bit (x86))
         MinCount=1,
         MaxCount=1,
-        InstanceType="g4dn.xlarge",
+        InstanceType="g4dn.xlarge",  # Tesla T4 GPU
         KeyName=keypair_name
     )
     instance_id = instances["Instances"][0]["InstanceId"]
@@ -252,18 +252,18 @@ def configure_ec2_instance(region='us-west-2'):
         execute_ssh_command(ssh_client, 'cat << EOF | sudo tee --append /etc/modprobe.d/blacklist.conf\nblacklist vga16fb\nblacklist nouveau\nblacklist rivafb\nblacklist nvidiafb\nblacklist rivatv\nEOF')
         execute_ssh_command(ssh_client, 'echo GRUB_CMDLINE_LINUX="rdblacklist=nouveau" | sudo tee -a /etc/default/grub')
         execute_ssh_command(ssh_client, 'sudo update-grub')
-        execute_ssh_command(ssh_client, 'aws s3 cp --recursive s3://ec2-linux-nvidia-drivers/grid-14.0/ .')
+        execute_ssh_command(ssh_client, 'aws s3 cp --recursive s3://ec2-linux-nvidia-drivers/grid-14.3/ .')  # Driver version 510.108.03, CUDA Version: 11.6
         execute_ssh_command(ssh_client, 'chmod +x NVIDIA-Linux-x86_64*.run')
         execute_ssh_command(ssh_client, 'sudo /bin/sh ./NVIDIA-Linux-x86_64*.run -s')
         execute_ssh_command(ssh_client, 'sudo reboot')
         time.sleep(40)  # Wait until the instance reboots
         ssh_client.connect(hostname=instance_public_ip, username="ubuntu", pkey=key)
-        execute_ssh_command(ssh_client, 'nvidia-smi -q | head', stdout_verification='11.6')  # Verify configuration worked
+        execute_ssh_command(ssh_client, 'nvidia-smi -q | head', stdout_verification='11.6')  # Verify installation worked
 
-        # Install Miniconda
-        execute_ssh_command(ssh_client, 'wget https://repo.anaconda.com/miniconda/Miniconda3-py39_4.12.0-Linux-x86_64.sh')
-        execute_ssh_command(ssh_client, 'chmod 755 Miniconda3-py39_4.12.0-Linux-x86_64.sh')
-        execute_ssh_command(ssh_client, './Miniconda3-py39_4.12.0-Linux-x86_64.sh -b')
+        # Install Miniconda (Python 3.10)
+        execute_ssh_command(ssh_client, 'wget https://repo.anaconda.com/miniconda/Miniconda3-py310_23.3.1-0-Linux-x86_64.sh')
+        execute_ssh_command(ssh_client, 'chmod 755 Miniconda3-py310_23.3.1-0-Linux-x86_64.sh')
+        execute_ssh_command(ssh_client, './Miniconda3-py310_23.3.1-0-Linux-x86_64.sh -b')
         # Update .bashrc file
         execute_ssh_command(ssh_client, "echo '# >>> conda initialize >>>' >> ~/.bashrc")
         execute_ssh_command(ssh_client, "echo '# !! Contents within this block are managed by 'conda init' !!' >> ~/.bashrc")
@@ -280,7 +280,7 @@ def configure_ec2_instance(region='us-west-2'):
         execute_ssh_command(ssh_client, "echo 'unset __conda_setup' >> ~/.bashrc")
         execute_ssh_command(ssh_client, "echo '# <<< conda initialize <<<' >> ~/.bashrc")
         execute_ssh_command(ssh_client, "echo 'export PYTHONPATH=$PYTHONPATH:/home/ubuntu/fosi' >> ~/.bashrc")
-        execute_ssh_command(ssh_client, "echo 'export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/ubuntu/miniconda3/envs/fosi/lib:/home/ubuntu/miniconda3/pkgs/cudatoolkit-11.3.1-h2bc3f7f_2/lib' >> ~/.bashrc")
+        execute_ssh_command(ssh_client, "echo 'export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/ubuntu/miniconda3/envs/fosi/lib' >> ~/.bashrc")
         execute_ssh_command(ssh_client, "echo 'export PATH=/home/ubuntu/miniconda3/envs/fosi/bin${PATH:+:${PATH}}' >> ~/.bashrc")
         # Create fosi environment
         execute_ssh_command(ssh_client, 'bash -ic "conda create --name fosi --clone base"')
@@ -288,8 +288,8 @@ def configure_ec2_instance(region='us-west-2'):
 
         # Clone the fosi project, pip install experiments/requirements.txt, and pip install CUDA toolkit
         execute_ssh_command(ssh_client, 'git clone https://github.com/hsivan/fosi')
-        execute_ssh_command(ssh_client, 'bash -ic "pip install -r fosi/experiments/experiments_requirements.txt -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html"', get_pty=True)
         execute_ssh_command(ssh_client, 'bash -ic "conda install -y -c \"nvidia/label/cuda-11.8.0\" cuda"', get_pty=True)
+        execute_ssh_command(ssh_client, 'bash -ic "pip install -r fosi/experiments/experiments_requirements.txt -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html"', get_pty=True)
 
         ssh_client.close()
     except Exception as e:

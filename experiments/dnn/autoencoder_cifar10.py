@@ -24,7 +24,7 @@ import optax
 from experiments.dnn.dnn_test_utils import start_test, get_config, write_config_to_file, get_optimizer
 
 # Path to the folder where the datasets are/should be downloaded
-DATASET_PATH = "./cifar10_dataset"
+DATASET_PATH = "./datasets"
 
 print("Device:", jax.devices()[0])
 

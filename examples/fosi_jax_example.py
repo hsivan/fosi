@@ -6,19 +6,20 @@ os.environ['JAX_DEFAULT_DTYPE_BITS'] = '32'
 from fosi import fosi_adam
 import jax.numpy as jnp
 import jax
+from jax.example_libraries import stax
+from jax.nn.initializers import zeros
 import optax
-import haiku as hk
 
 key = jax.random.PRNGKey(42)
 n_dim = 100
 target_params = 0.5
 
-# Single linear layer w/o bias equals inner product between the input and the network parameters
-model = hk.without_apply_rng(hk.transform(lambda x: hk.Linear(1, with_bias=False, w_init=hk.initializers.Constant(0.0))(x)))
+# Single linear layer equals inner product between the input and the network parameters
+init_fn, apply_fn = stax.serial(stax.Dense(1, W_init=zeros, b_init=zeros))
 
 def loss_fn(params, batch):
     x, y = batch
-    y_pred = model.apply(params, x).squeeze()
+    y_pred = apply_fn(params, x).squeeze()
     loss = jnp.mean(optax.l2_loss(y_pred, y))
     return loss
 
@@ -37,7 +38,7 @@ data_gen = data_generator(key, target_params, n_dim)
 optimizer = fosi_adam(optax.adam(1e-3), loss_fn, next(data_gen))
 
 # Initialize parameters of the model and optimizer
-params = model.init(key, next(data_gen)[0])
+_, params = init_fn(key, next(data_gen)[0].shape)
 opt_state = optimizer.init(params)
 
 @jax.jit
@@ -53,4 +54,4 @@ for i in range(5000):
     if i % 100 == 0:
         print("loss:", loss)
 
-assert jnp.allclose(params['linear']['w'], target_params), 'Optimization should retrieve the target params used to generate the data.'
+assert jnp.allclose(params[0][0], target_params), 'Optimization should retrieve the target params used to generate the data.'

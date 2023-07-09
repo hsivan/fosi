@@ -24,7 +24,7 @@ conda install -c "nvidia/label/cuda-11.8.0" cuda
 ```
 Otherwise, a global installation is required:
 ```bash
-sudo apt-get install cuda
+sudo apt-get install cuda-11-8
 ```
 After installing CUDA toolkit, follow [NVIDIA's environment setup instructions](https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html#environment-setup)
 to set the environment variables PATH and LD_LIBRARY_PATH.
@@ -62,6 +62,10 @@ and its API is designed to be similar to that of Optax optimizers.
 In the case of PyTorch, FOSI utilizes [TorchOpt](https://github.com/metaopt/torchopt) optimizers as base optimizers,
 and its API is designed to be similar to that of TorchOpt optimizers.
 
+*Note: Within the FOSI package, you will find implementations of the Lanczos algorithm in both JAX and PyTorch frameworks.
+Both implementations utilize the forward-over-reverse technique to efficiently compute the Hessian-vector product.
+It is worth mentioning that the just-in-time (jit) compilation time of JAX is minimal, even when dealing with large models and functions containing up to 100 million parameters.*
+
 ### JAX
 This example demonstrates the application of FOSI with the Adam base optimizer for a program based on JAX.
 
@@ -74,19 +78,20 @@ os.environ['JAX_DEFAULT_DTYPE_BITS'] = '32'
 from fosi import fosi_adam
 import jax.numpy as jnp
 import jax
+from jax.example_libraries import stax
+from jax.nn.initializers import zeros
 import optax
-import haiku as hk
 
 key = jax.random.PRNGKey(42)
 n_dim = 100
 target_params = 0.5
 
-# Single linear layer w/o bias equals inner product between the input and the network parameters
-model = hk.without_apply_rng(hk.transform(lambda x: hk.Linear(1, with_bias=False, w_init=hk.initializers.Constant(0.0))(x)))
+# Single linear layer equals inner product between the input and the network parameters
+init_fn, apply_fn = stax.serial(stax.Dense(1, W_init=zeros, b_init=zeros))
 
 def loss_fn(params, batch):
     x, y = batch
-    y_pred = model.apply(params, x).squeeze()
+    y_pred = apply_fn(params, x).squeeze()
     loss = jnp.mean(optax.l2_loss(y_pred, y))
     return loss
 
@@ -105,7 +110,7 @@ data_gen = data_generator(key, target_params, n_dim)
 optimizer = fosi_adam(optax.adam(1e-3), loss_fn, next(data_gen))
 
 # Initialize parameters of the model and optimizer
-params = model.init(key, next(data_gen)[0])
+_, params = init_fn(key, next(data_gen)[0].shape)
 opt_state = optimizer.init(params)
 
 @jax.jit
@@ -121,7 +126,7 @@ for i in range(5000):
     if i % 100 == 0:
         print("loss:", loss)
 
-assert jnp.allclose(params['linear']['w'], target_params), 'Optimization should retrieve the target params used to generate the data.'
+assert jnp.allclose(params[0][0], target_params), 'Optimization should retrieve the target params used to generate the data.'
 ```
 
 ### PyTorch
@@ -139,15 +144,19 @@ device = torch.device("cuda")  # "cpu" or "cuda"
 n_dim = 100
 target_params = 0.5
 
-# Single linear layer w/o bias equals inner product between the input and the network parameters
-model = torch.nn.Linear(n_dim, 1, bias=False).to(device)
+# Single linear layer equals inner product between the input and the network parameters
+model = torch.nn.Linear(n_dim, 1).to(device)
 model.weight.data.fill_(0.0)
+model.bias.data.fill_(0.0)
 apply_fn, params = functorch.make_functional(model)
 
 def loss_fn(params, batch):
     x, y = batch
     y_pred = apply_fn(params, x)
-    loss = torch.mean((y_pred - batch[1])**2)  # MSE loss
+    # TODO: using torch.nn.MSELoss causes 'RuntimeError: ZeroTensors are immutable' when calling torch.autograd.grad
+    #  in lanczos_algorithm::hvp_forward_ad()
+    #loss = torch.nn.MSELoss()(y_pred, y)
+    loss = torch.mean((y_pred - batch[1])**2)
     return loss
 
 def data_generator(target_params, n_dim):
@@ -196,6 +205,11 @@ We utilized the K-FAC implementation from the [KFAC-JAX](https://github.com/deep
 implementation from the [JAXopt](https://github.com/google/jaxopt) library.
 As a base optimizer, FOSI employs Adam and HB.
 For further information regarding the experiments, please refer to the paper for the full details.
+
+*Note: Additionally, we offer a [script](experiments/aws_ec2_configure.py) that initiates and configures an AWS EC2 instance with a GPU and the necessary drivers.
+This script handles the cloning of the FOSI project onto the instance and installs all the required dependencies.
+Before executing the script, it is important to ensure that the prerequisites mentioned at the beginning of the script are met.
+Once satisfied, the user can establish an SSH connection to the EC2 instance and promptly execute the provided examples or run the experiments.*
 
 ## Citing FOSI
 

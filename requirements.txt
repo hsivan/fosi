@@ -1,6 +1,6 @@
 # 1. Run manually one of the following:
 #    If using conda environment: conda install -c "nvidia/label/cuda-11.8.0" cuda-toolkit
-#    Otherwise: sudo apt-get install cuda
+#    Otherwise: sudo apt-get install cuda-11-8
 # 2. Follow https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html#environment-setup to set the
 #    environment variables PATH and LD_LIBRARY_PATH. To find the lib/bin folders
 #    in case of conda environment use: find ~ -name 'libcusolver.so.11'
@@ -9,8 +9,8 @@
 
 # Installs JAX's wheel compatible with CUDA 11 and cuDNN 8.2 or newer
 #-f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
-jax[cuda11_cudnn82]==0.3.25
-optax==0.1.4
+jax[cuda11_cudnn82]==0.4.1
+optax==0.1.5
 functorch==2.0.0
 torchopt==0.7.0
 torch==2.0.1

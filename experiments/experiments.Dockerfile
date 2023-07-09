@@ -1,15 +1,17 @@
-FROM nvidia/cuda:11.4.1-cudnn8-runtime-ubuntu20.04
+FROM nvidia/cuda:11.6.2-cudnn8-runtime-ubuntu20.04
 
 # Prevents debconf warning about delaying package configuration
 ENV DEBIAN_FRONTEND noninteractive
 ENV DEBCONF_NOWARNINGS="yes"
 
 # Install python3-pip
-RUN apt-get update && apt-get install python3-pip -y
+RUN apt-get update
+RUN apt-get install python3-pip -y
+RUN pip3 install --upgrade pip
 
 # Install cuda-nvcc that includes ptxas, which JAX requires and is not included in the installed CUDA toolkit.
-# The version should match the CUDA toolkit used (11.4).
-RUN apt-get install -y cuda-nvcc-11-4
+# The version should match the CUDA toolkit used (11.8).
+RUN apt-get install -y cuda-nvcc-11-8
 # RUN echo $(find /usr/ -name 'ptxas')
 
 # Install FOSI's requirements

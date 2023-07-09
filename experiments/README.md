@@ -36,7 +36,7 @@ conda install -c "nvidia/label/cuda-11.8.0" cuda
 ```
 Otherwise, a global installation is required:
 ```bash
-sudo apt-get install cuda
+sudo apt-get install cuda-11-8
 ```
 After installing CUDA toolkit, follow [NVIDIA's environment setup instructions](https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html#environment-setup)
 to set the environment variables PATH and LD_LIBRARY_PATH.

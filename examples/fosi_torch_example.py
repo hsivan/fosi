@@ -8,10 +8,10 @@ device = torch.device("cuda")  # "cpu" or "cuda"
 n_dim = 100
 target_params = 0.5
 
-# Single linear layer w/o bias equals inner product between the input and the network parameters
-
-model = torch.nn.Linear(n_dim, 1, bias=False).to(device)
+# Single linear layer equals inner product between the input and the network parameters
+model = torch.nn.Linear(n_dim, 1).to(device)
 model.weight.data.fill_(0.0)
+model.bias.data.fill_(0.0)
 apply_fn, params = functorch.make_functional(model)
 
 def loss_fn(params, batch):

@@ -51,7 +51,7 @@ result_summary
 new_user_credentials.csv
 
 # Datasets
-cifar10_dataset
+datasets
 index_valid.csv
 index_train.csv
 train_jpg
