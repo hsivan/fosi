@@ -18,6 +18,8 @@ def get_x_initial(objective, eigenvectors, n_dim=100):
 def objective(x, hessian, batch=None):
     if len(x.shape) == 1:
         return 0.5 * x @ hessian @ x.T
+    # For plotting
+    return 0.5 * np.sum(x * (hessian @ x.T).T, axis=1)
 
 
 def optimize(objective, x_initial, n_iter, eta, beta1, beta2, update_func):

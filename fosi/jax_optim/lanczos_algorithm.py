@@ -51,6 +51,23 @@ def lanczos_alg(order, loss, rng_key, k_largest, l_smallest=0, return_precision=
 
         return (tridiag, vecs)
 
+    def partial_hvp(i, args, params, batch, v_flat, batch_slice_size):
+        '''
+        Compute the hvp on slice of the batch
+        '''
+        w = args
+        loss_fn = lambda x: loss(x, (jax.lax.dynamic_slice(batch[0], (i*batch_slice_size,) + (0,)*(len(batch[0].shape)-1), (batch_slice_size,) + batch[0].shape[1:]),
+                                     jax.lax.dynamic_slice(batch[1], (i*batch_slice_size,) + (0,)*(len(batch[0].shape)-1), (batch_slice_size,) + batch[1].shape[1:])))
+        if b_parallel:
+            # Re-use same axis_name as in the call to `pmap(...lanczos_alg_jitted...)`.
+            # Note: only support loss functions with mean aggregation. For sum aggregation use psum instead of pmean.
+            grad_fn = lambda x: jax.lax.pmean(grad(loss_fn)(x), axis_name='batch')
+        else:
+            grad_fn = grad(loss_fn)
+        hessian_vp = jvp(grad_fn, [params], [v_flat])[1]
+        w += ravel_pytree(hessian_vp)[0]
+        return w
+
     def lanczos_iteration(i, args, params, unravel, batch):
         vecs, tridiag = args
 
@@ -60,6 +77,8 @@ def lanczos_alg(order, loss, rng_key, k_largest, l_smallest=0, return_precision=
         # Assign to w the Hessian vector product Hv. Uses forward-over-reverse mode for computing Hv.
         # We assume here that the default precision is 32 bit.
         v_flat = unravel(v) if return_precision == '64' else unravel(v.astype(np.float32))  # convert v to the param tree structure
+
+        # Without batch splitting, in case the hvp on the entire batch fits in memory
         loss_fn = lambda x: loss(x, batch)
         if b_parallel:
             # Re-use same axis_name as in the call to `pmap(...lanczos_alg_jitted...)`.
@@ -69,6 +88,15 @@ def lanczos_alg(order, loss, rng_key, k_largest, l_smallest=0, return_precision=
             grad_fn = grad(loss_fn)
         hessian_vp = jvp(grad_fn, [params], [v_flat])[1]
         w, _ = ravel_pytree(hessian_vp)
+
+        # Batch splitting for large batch size that do no fit in memory; evaluate the hvp on slices of the batch and
+        # average the results
+        '''w = np.zeros_like(v)
+        batch_slice_size = 2
+        partial_hvp_fn = lambda i, args: partial_hvp(i, args, params, batch, v_flat, batch_slice_size)
+        w = jax.lax.fori_loop(0, batch[0].shape[0] // batch_slice_size, partial_hvp_fn, w)
+        w /= (batch[0].shape[0] // batch_slice_size)'''
+
         w = w.astype(np.float64)
 
         # Evaluates alpha and update tridiag diagonal with alpha

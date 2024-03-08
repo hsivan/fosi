@@ -76,10 +76,9 @@ import os
 os.environ['JAX_DEFAULT_DTYPE_BITS'] = '32'
 
 from fosi import fosi_adam
-import jax.numpy as jnp
 import jax
+import jax.numpy as jnp
 from jax.example_libraries import stax
-from jax.nn.initializers import zeros
 import optax
 
 key = jax.random.PRNGKey(42)
@@ -87,7 +86,7 @@ n_dim = 100
 target_params = 0.5
 
 # Single linear layer equals inner product between the input and the network parameters
-init_fn, apply_fn = stax.serial(stax.Dense(1, W_init=zeros, b_init=zeros))
+init_fn, apply_fn = stax.serial(stax.Dense(1, W_init=jax.nn.initializers.zeros, b_init=jax.nn.initializers.zeros))
 
 def loss_fn(params, batch):
     x, y = batch
@@ -153,9 +152,6 @@ apply_fn, params = functorch.make_functional(model)
 def loss_fn(params, batch):
     x, y = batch
     y_pred = apply_fn(params, x)
-    # TODO: using torch.nn.MSELoss causes 'RuntimeError: ZeroTensors are immutable' when calling torch.autograd.grad
-    #  in lanczos_algorithm::hvp_forward_ad()
-    #loss = torch.nn.MSELoss()(y_pred, y)
     loss = torch.mean((y_pred - batch[1])**2)
     return loss
 
@@ -216,12 +212,11 @@ Once satisfied, the user can establish an SSH connection to the EC2 instance and
 If FOSI has been useful for your research, and you would like to cite it in an academic
 publication, please use the following Bibtex entry:
 ```bibtex
-@misc{sivan_fosi_2023,
-  author = {Sivan, Hadar and Gabel, Moshe and Schuster, Assaf},
-  title = {FOSI: Hybrid First and Second Order Optimization},
-  year = {2023},
-  doi = {10.48550/ARXIV.2302.08484},
-  url = {https://arxiv.org/abs/2302.08484},
-  publisher = {arXiv},
+@inproceedings{sivan2024fosi,
+  title={{FOSI}: Hybrid First and Second Order Optimization},
+  author={Hadar Sivan and Moshe Gabel and Assaf Schuster},
+  booktitle={The Twelfth International Conference on Learning Representations},
+  year={2024},
+  url={https://openreview.net/forum?id=NvbeD9Ttkx}
 }
 ```

@@ -4,10 +4,9 @@ import os
 os.environ['JAX_DEFAULT_DTYPE_BITS'] = '32'
 
 from fosi import fosi_adam
-import jax.numpy as jnp
 import jax
+import jax.numpy as jnp
 from jax.example_libraries import stax
-from jax.nn.initializers import zeros
 import optax
 
 key = jax.random.PRNGKey(42)
@@ -15,7 +14,7 @@ n_dim = 100
 target_params = 0.5
 
 # Single linear layer equals inner product between the input and the network parameters
-init_fn, apply_fn = stax.serial(stax.Dense(1, W_init=zeros, b_init=zeros))
+init_fn, apply_fn = stax.serial(stax.Dense(1, W_init=jax.nn.initializers.zeros, b_init=jax.nn.initializers.zeros))
 
 def loss_fn(params, batch):
     x, y = batch
